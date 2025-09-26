@@ -72,14 +72,11 @@ def compute_metric(metric, candidate_text, reference_text, **kwargs):
         inputs_ref = tokenizer(reference_text, return_tensors="pt", truncation=True)
 
         with torch.no_grad():
-            cand_emb = model(**inputs_cand).last_hidden_state.mean(1).squeeze(0)
-            ref_emb = model(**inputs_ref).last_hidden_state.mean(1).squeeze(0)
-
-        cand_emb = cand_emb.unsqueeze(0)
-        ref_emb = ref_emb.unsqueeze(0)
+            cand_emb = model(**inputs_cand).last_hidden_state.squeeze(0)
+            ref_emb = model(**inputs_ref).last_hidden_state.squeeze(0)
 
         cost = 1 - torch.mm(cand_emb, ref_emb.T) / (
-            cand_emb.norm(dim=1, keepdim=True) * ref_emb.norm(dim=1, keepdim=True).T
+            cand_emb.norm(dim=1)[:, None] * ref_emb.norm(dim=1)[None, :]
         )
 
         w_cand = torch.ones(cand_emb.size(0)) / cand_emb.size(0)
