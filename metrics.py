@@ -1,3 +1,4 @@
+import math
 import re
 
 import bert_score
@@ -68,6 +69,19 @@ def compute_metric(metric, candidate_text, reference_text, **kwargs):
         tokenizer = AutoTokenizer.from_pretrained("roberta-large")
         model = AutoModel.from_pretrained("roberta-large")
 
+        texts = [candidate_text, reference_text]
+        idf_dict = {}
+        n_docs = len(texts)
+        for text in texts:
+            tokens = set(tokenizer.tokenize(text))
+            for tok in tokens:
+                idf_dict[tok] = idf_dict.get(tok, 0) + 1
+        for tok, cnt in idf_dict.items():
+            idf_dict[tok] = math.log((n_docs + 1) / (cnt + 1))
+
+        tokens_cand = tokenizer.tokenize(candidate_text)
+        tokens_ref = tokenizer.tokenize(reference_text)
+
         inputs_cand = tokenizer(candidate_text, return_tensors="pt", truncation=True)
         inputs_ref = tokenizer(reference_text, return_tensors="pt", truncation=True)
 
@@ -75,15 +89,18 @@ def compute_metric(metric, candidate_text, reference_text, **kwargs):
             cand_emb = model(**inputs_cand).last_hidden_state.squeeze(0)
             ref_emb = model(**inputs_ref).last_hidden_state.squeeze(0)
 
-        cost = 1 - torch.mm(cand_emb, ref_emb.T) / (
-            cand_emb.norm(dim=1)[:, None] * ref_emb.norm(dim=1)[None, :]
-        )
+        cand_emb = cand_emb / cand_emb.norm(dim=1, keepdim=True)
+        ref_emb = ref_emb / ref_emb.norm(dim=1, keepdim=True)
 
-        w_cand = torch.ones(cand_emb.size(0)) / cand_emb.size(0)
-        w_ref = torch.ones(ref_emb.size(0)) / ref_emb.size(0)
+        cost = 1 - torch.mm(cand_emb, ref_emb.T)
+
+        w_cand = torch.tensor([idf_dict.get(tok, 1.0) for tok in tokens_cand])
+        w_ref = torch.tensor([idf_dict.get(tok, 1.0) for tok in tokens_ref])
+
+        w_cand = w_cand / w_cand.sum()
+        w_ref = w_ref / w_ref.sum()
 
         emd = ot.emd2(w_cand.numpy(), w_ref.numpy(), cost.numpy())
-
         return 1 - emd
 
     else:
