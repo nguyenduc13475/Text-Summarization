@@ -8,6 +8,7 @@ from nltk.translate.bleu_score import SmoothingFunction, sentence_bleu
 from nltk.translate.meteor_score import meteor_score
 from rouge_score import rouge_scorer
 from sentence_transformers import SentenceTransformer
+from torch.nn import functional as F
 
 nltk.download("wordnet")
 
@@ -71,14 +72,15 @@ def compute_metric(metric, candidate_text, reference_text, **kwargs):
             candidate_text,
             output_value="token_embeddings",
             convert_to_tensor=True,
-            normalize_embeddings=True,
         )
         reference_embedding = model.encode(
             reference_text,
             output_value="token_embeddings",
             convert_to_tensor=True,
-            normalize_embeddings=True,
         )
+
+        candidate_embedding = F.normalize(candidate_embedding, p=2, dim=1)
+        reference_embedding = F.normalize(reference_embedding, p=2, dim=1)
 
         cost = 1 - torch.mm(candidate_embedding, reference_embedding.T)
 
