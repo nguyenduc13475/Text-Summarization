@@ -64,9 +64,9 @@ def compute_metric(metric, candidate_text, reference_text, **kwargs):
         return float(F1.mean())
 
     # MoverScore
-    elif metric.lower() == "moverscore":
-        tokenizer = AutoTokenizer.from_pretrained("distilbert-base-uncased")
-        model = AutoModel.from_pretrained("distilbert-base-uncased")
+    if metric == "moverscore":
+        tokenizer = AutoTokenizer.from_pretrained("roberta-large")
+        model = AutoModel.from_pretrained("roberta-large")
 
         inputs_cand = tokenizer(candidate_text, return_tensors="pt", truncation=True)
         inputs_ref = tokenizer(reference_text, return_tensors="pt", truncation=True)
