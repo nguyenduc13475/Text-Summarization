@@ -16,8 +16,8 @@ class PointerGenerator(nn.Module):
         attention_dim=224,
         bottle_neck_dim=56,
         unknown_token=3,
-        start_token=0,
-        end_token=1,
+        start_token=1,
+        end_token=2,
     ):
         super().__init__()
         self.embedding_layer = nn.Embedding(vocab_size, embedding_dim)
@@ -48,6 +48,7 @@ class PointerGenerator(nn.Module):
         self.end_token = end_token
 
         self.optimizer = optim.Adam(self.parameters(), lr=1e-3)
+        self.cov_loss_factor = 0.75
 
     def train_one_batch(self, input_ids, labels, input_lengths=None):
         num_oovs = (
@@ -132,7 +133,7 @@ class PointerGenerator(nn.Module):
             if input_lengths is not None:
                 nll_losses = nll_losses.masked_fill(input_lengths <= t, 0)
                 cov_losses = cov_losses.masked_fill(input_lengths <= t, 0)
-            losses = losses + nll_losses + cov_losses
+            losses = losses + nll_losses + self.cov_loss_factor * cov_losses
             num_tokens += torch.sum(input_lengths > t).item()
             coverage_vector = coverage_vector + attention_distribution
 
