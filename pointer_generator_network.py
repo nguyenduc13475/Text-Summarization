@@ -4,20 +4,22 @@ import torch.nn.functional as F
 import torch.optim as optim
 
 from beam_search import beam_search
+from utils import tensor_dict_to_scalar
 
 
-class PointerGenerator(nn.Module):
+class PointerGeneratorNetwork(nn.Module):
     def __init__(
         self,
         vocab_size,
+        tokenizer,
         embedding_dim=128,
         encoder_hidden_dim=160,
         decoder_hidden_dim=196,
         attention_dim=224,
         bottle_neck_dim=56,
-        unknown_token=3,
-        start_token=1,
-        end_token=2,
+        cov_loss_factor=0.75,
+        learning_rate=1e-3,
+        device="cpu",
     ):
         super().__init__()
         self.embedding_layer = nn.Embedding(vocab_size, embedding_dim)
@@ -43,14 +45,14 @@ class PointerGenerator(nn.Module):
         self.embedding_to_switch = nn.Linear(embedding_dim, 1, bias=False)
 
         self.vocab_size = vocab_size
-        self.unknown_token = unknown_token
-        self.start_token = start_token
-        self.end_token = end_token
+        self.unknown_token = tokenizer.token_to_id("<unk>")
+        self.start_token = tokenizer.token_to_id("<s>")
+        self.end_token = tokenizer.token_to_id("</s>")
 
-        self.optimizer = optim.Adam(self.parameters(), lr=1e-3)
-        self.cov_loss_factor = 0.75
+        self.optimizer = optim.Adam(self.parameters(), lr=learning_rate)
+        self.cov_loss_factor = cov_loss_factor
 
-    def train_one_batch(self, input_ids, labels, input_lengths=None):
+    def compute_loss(self, input_ids, labels, input_lengths=None):
         num_oovs = (
             max(input_ids.max().item(), self.vocab_size - 1) - self.vocab_size + 1
         )
@@ -82,7 +84,8 @@ class PointerGenerator(nn.Module):
         coverage_vector = torch.zeros(batch_size, max_sequence_length)
         current_token = torch.tensor([self.start_token] * batch_size)
 
-        losses = torch.zeros(batch_size)
+        nll_losses = torch.zeros(batch_size)
+        cov_losses = torch.zeros(batch_size)
         num_tokens = 0
 
         for t in range(max_summary_length):
@@ -128,23 +131,43 @@ class PointerGenerator(nn.Module):
                 dim=1
             )
 
-            nll_losses = -torch.log(next_token_probs + 1e-9)
-            cov_losses = torch.min(attention_distribution, coverage_vector).sum(dim=1)
+            nll_losses = nll_losses - torch.log(next_token_probs + 1e-9)
+            cov_losses = cov_losses + torch.min(
+                attention_distribution, coverage_vector
+            ).sum(dim=1)
             if input_lengths is not None:
                 nll_losses = nll_losses.masked_fill(input_lengths <= t, 0)
                 cov_losses = cov_losses.masked_fill(input_lengths <= t, 0)
-            losses = losses + nll_losses + self.cov_loss_factor * cov_losses
             num_tokens += torch.sum(input_lengths > t).item()
             coverage_vector = coverage_vector + attention_distribution
 
-        average_loss = losses.sum() / num_tokens
+        nll_loss = nll_losses.sum()
+        cov_loss = nll_losses.sum()
+        total_loss = nll_loss + cov_loss * self.cov_loss_factor
+
+        return {"nll_loss": nll_loss, "cov_loss": cov_loss, "total_loss": total_loss}
+
+    def train_one_batch(self, input_ids, labels, input_lengths=None):
+        losses = self.compute_loss(input_ids, labels, input_lengths)
 
         self.optimizer.zero_grad()
-        average_loss.backward()
+        losses["total_loss"].backward()
         self.optimizer.step()
-        return average_loss.item()
+        return tensor_dict_to_scalar(losses)
 
-    def infer(self, input_ids, max_summary_length=100, beam_width=4):
+    def validate_one_batch(self, input_ids, labels, input_lengths=None):
+        with torch.no_grad():
+            losses = self.compute_loss(input_ids, labels, input_lengths)
+            return tensor_dict_to_scalar(losses)
+
+    def infer(
+        self,
+        input_ids,
+        max_summary_length=100,
+        beam_width=4,
+        return_attention=False,
+        return_embedding=False,
+    ):
         num_oovs = (
             max(input_ids.max().item(), self.vocab_size - 1) - self.vocab_size + 1
         )
@@ -165,6 +188,7 @@ class PointerGenerator(nn.Module):
 
         # state {decoder_hidden_state, decoder_cell_state, coverage_vector, sequence}
         def predictor(state):
+            nonlocal return_attention
             new_state = dict()
             current_embedding = self.embedding_layer(
                 torch.tensor(state["sequence"][-1])
@@ -211,9 +235,14 @@ class PointerGenerator(nn.Module):
                 state["coverage_vector"] + attention_distribution
             )
 
+            if return_attention:
+                new_state["input_attention_distributions"] = state[
+                    "input_attention_distributions"
+                ] + [attention_distribution]
+
             return final_distribution, new_state
 
-        summary = beam_search(
+        beam_search_final_state = beam_search(
             predictor=predictor,
             start_state={
                 "decoder_hidden_state": self.enc_to_dec_hidden(
@@ -222,10 +251,31 @@ class PointerGenerator(nn.Module):
                 "decoder_cell_state": self.enc_to_dec_cell(encoder_final_cell_state),
                 "coverage_vector": torch.zeros(len(input_ids)),
                 "sequence": [self.start_token],
-            },
+            }
+            | (
+                {
+                    "input_attention_distributions": [],
+                }
+                if return_attention
+                else {}
+            ),
             beam_width=beam_width,
             max_state_length=max_summary_length,
             end_state_indicator=lambda state: state["sequence"][-1] == self.end_token,
-        )["sequence"]
+        )
 
-        return summary[1:]
+        return (
+            {
+                "summary": beam_search_final_state["sequence"][1:],
+            }
+            | (
+                {
+                    "input_attention_distributions": (
+                        beam_search_final_state["input_attention_distributions"]
+                    ),
+                }
+                if return_attention
+                else {}
+            )
+            | ({"embedding": embeddings} if return_embedding else None)
+        )

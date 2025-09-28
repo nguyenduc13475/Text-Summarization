@@ -1,3 +1,4 @@
+import math
 import random
 
 import torch
@@ -9,12 +10,45 @@ from torch.utils.data import Dataset, Sampler
 
 class CNNDailyMailDataset(Dataset):
     def __init__(
-        self, split="train", vocab_file="vocab.json", merges_file="merges.txt"
+        self,
+        split="train",
+        vocab_file="vocab.json",
+        merges_file="merges.txt",
+        fold=None,
+        num_folds=None,
+        dataset=None,
     ):
         super().__init__()
-        self.ds = load_dataset("abisee/cnn_dailymail", "3.0.0")[split]
         self.tokenizer = ByteLevelBPETokenizer(vocab_file, merges_file)
         self.vocab_size = self.tokenizer.get_vocab_size()
+
+        match split:
+            case "train" | "cross validation":
+                full_ds = full_ds["train"]
+            case "test":
+                full_ds = full_ds["test"]
+            case "validation":
+                full_ds = full_ds["validation"]
+            case _:
+                if dataset is not None:
+                    full_ds = dataset
+                else:
+                    raise ValueError("at least split or dataset must be valid!")
+
+        if fold is not None and num_folds is not None:
+            total_size = len(self.ds)
+            fold_size = math.ceil(total_size / num_folds)
+            indices = list(range(total_size))
+
+            start_idx = fold * fold_size
+            end_idx = min(start_idx + fold_size, total_size)
+
+            if split == "train":
+                self.ds = full_ds.select(indices[:start_idx] + indices[end_idx:])
+            else:
+                self.ds = full_ds.select(indices[start_idx:end_idx])
+        else:
+            self.ds = full_ds
 
     def __len__(self):
         return len(self.ds)
@@ -103,16 +137,3 @@ def collate_fn(batch):
         "labels": labels,
         "oov_lists": [s["oov_list"] for s in batch],
     }
-
-
-def token_ids_to_text(tokenizer, ids, oov_list, vocab_size):
-    tokens = []
-    for idx in ids:
-        if idx < vocab_size:
-            tokens.append(tokenizer.id_to_token(idx))
-        else:
-            oov_idx = idx - vocab_size
-            tokens.append(oov_list[oov_idx])
-
-    text = "".join(tokens).replace("Ġ", " ").strip()
-    return text

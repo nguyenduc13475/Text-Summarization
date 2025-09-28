@@ -6,18 +6,19 @@ import torch.optim as optim
 from beam_search import beam_search
 from dataset import token_ids_to_text
 from metrics import compute_metric
+from utils import tensor_dict_to_scalar
 
 
-class NeuralIntraAttention(nn.Module):
+class NeuralIntraAttentionModel(nn.Module):
     def __init__(
         self,
         vocab_size,
         tokenizer,
         embedding_dim=128,
         hidden_dim=160,
-        unknown_token=3,
-        start_token=1,
-        end_token=2,
+        rl_loss_factor=0.75,
+        learning_rate=1e-3,
+        device="cpu",
     ):
         super().__init__()
         self.embedding_layer = nn.Embedding(vocab_size, embedding_dim)
@@ -37,15 +38,15 @@ class NeuralIntraAttention(nn.Module):
 
         self.hidden_dim = hidden_dim
         self.vocab_size = vocab_size
-        self.unknown_token = unknown_token
-        self.start_token = start_token
-        self.end_token = end_token
+        self.unknown_token = tokenizer.token_to_id("<unk>")
+        self.start_token = tokenizer.token_to_id("<s>")
+        self.end_token = tokenizer.token_to_id("</s>")
         self.tokenizer = tokenizer
 
-        self.optimizer = optim.Adam(self.parameters(), lr=1e-3)
-        self.reinforce_loss_factor = 0.75
+        self.optimizer = optim.Adam(self.parameters(), lr=learning_rate)
+        self.rl_loss_factor = rl_loss_factor
 
-    def train_one_batch(
+    def compute_loss(
         self, input_ids, labels, oov_lists, input_lengths=None, max_reinforce_length=100
     ):
         num_oovs = (
@@ -68,7 +69,7 @@ class NeuralIntraAttention(nn.Module):
         ) = self.encoder(embeddings)
         out_proj = F.tanh(self.embedding_layer.weight @ self.vocab_proj)
 
-        teacher_forcing_loss = torch.zeros(batch_size)
+        tf_loss = torch.zeros(batch_size)
 
         random_metrics = []
         greedy_metrics = []
@@ -192,7 +193,7 @@ class NeuralIntraAttention(nn.Module):
                     nll_loss = -torch.log(next_token_probs + 1e-9)
                     if input_lengths is not None:
                         nll_loss = nll_loss.masked_fill(input_lengths <= t, 0)
-                    teacher_forcing_loss = teacher_forcing_loss + nll_loss
+                    tf_loss = tf_loss + nll_loss
                     num_tokens += torch.sum(input_lengths > t).item()
 
                 elif name == "random":
@@ -266,7 +267,7 @@ class NeuralIntraAttention(nn.Module):
                 )
 
             if name == "teacher":
-                teacher_forcing_loss = teacher_forcing_loss.sum() / num_tokens
+                tf_loss = tf_loss.sum() / num_tokens
             elif name == "random":
                 random_metrics = []
                 for b, random_sequence in enumerate(random_sequences):
@@ -300,19 +301,48 @@ class NeuralIntraAttention(nn.Module):
                     )
                     greedy_metrics.append(greedy_metric)
 
-        reinforce_loss = (
+        rl_loss = (
             (torch.tensor(greedy_metrics) - torch.tensor(random_metrics))
             * cummulative_random_log_probs
         ).sum()
 
-        total_loss = teacher_forcing_loss + reinforce_loss * self.reinforce_loss_factor
+        total_loss = tf_loss + rl_loss * self.rl_loss_factor
+
+        return {"tf_loss": tf_loss, "rl_loss": rl_loss, "total_loss": total_loss}
+
+    def train_one_batch(
+        self, input_ids, labels, oov_lists, input_lengths=None, max_reinforce_length=100
+    ):
+        losses = self.compute_loss(
+            input_ids, labels, oov_lists, input_lengths=None, max_reinforce_length=100
+        )
 
         self.optimizer.zero_grad()
-        total_loss.backward()
+        losses["total_loss"].backward()
         self.optimizer.step()
-        return total_loss.item()
+        return tensor_dict_to_scalar(losses)
 
-    def infer(self, input_ids, max_summary_length=100, beam_width=4):
+    def validate_one_batch(
+        self, input_ids, labels, oov_lists, input_lengths=None, max_reinforce_length=100
+    ):
+        with torch.no_grad():
+            losses = self.compute_loss(
+                input_ids,
+                labels,
+                oov_lists,
+                input_lengths=None,
+                max_reinforce_length=100,
+            )
+            return tensor_dict_to_scalar(losses)
+
+    def infer(
+        self,
+        input_ids,
+        max_summary_length=100,
+        beam_width=4,
+        return_attention=False,
+        return_embedding=False,
+    ):
         num_oovs = (
             max(input_ids.max().item(), self.vocab_size - 1) - self.vocab_size + 1
         )
@@ -331,7 +361,7 @@ class NeuralIntraAttention(nn.Module):
         out_proj = F.tanh(self.embedding_layer.weight @ self.vocab_proj)
 
         def predictor(state):
-            nonlocal out_proj
+            nonlocal out_proj, return_attention
             new_state = dict()
             current_embedding = self.embedding_layer(
                 torch.tensor(state["sequence"][-1])
@@ -410,9 +440,18 @@ class NeuralIntraAttention(nn.Module):
                 dim=0,
             )
 
+            if return_attention:
+                new_state["input_attention_distributions"] = state[
+                    "input_attention_distributions"
+                ] + [encoder_attention_distribution]
+
+                new_state["output_attention_distributions"] = state[
+                    "output_attention_distributions"
+                ] + [decoder_attention_distribution]
+
             return final_distribution, new_state
 
-        summary = beam_search(
+        beam_search_final_state = beam_search(
             predictor=predictor,
             start_state={
                 "decoder_hidden_state": encoder_final_hidden_state.reshape(-1),
@@ -420,11 +459,36 @@ class NeuralIntraAttention(nn.Module):
                 "cummulative_encoder_attention_scores": torch.zeros(len(input_ids)),
                 "decoder_hidden_states": torch.empty(0, self.hidden_dim * 2),
                 "sequence": [self.start_token],
-            },
+            }
+            | (
+                {
+                    "input_attention_distributions": [],
+                    "output_attention_distributions": [],
+                }
+                if return_attention
+                else {}
+            ),
             beam_width=beam_width,
             max_state_length=max_summary_length,
             end_state_indicator=lambda state: state["sequence"][-1] == self.end_token,
             unrepeated_trigram=True,
-        )["sequence"]
+        )
 
-        return summary[1:]
+        return (
+            {
+                "summary": beam_search_final_state["sequence"][1:],
+            }
+            | (
+                {
+                    "input_attention_distributions": (
+                        beam_search_final_state["input_attention_distributions"]
+                    ),
+                    "output_attention_distributions": (
+                        beam_search_final_state["output_attention_distributions"]
+                    ),
+                }
+                if return_attention
+                else {}
+            )
+            | ({"embedding": embeddings} if return_embedding else None)
+        )

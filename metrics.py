@@ -13,7 +13,7 @@ from torch.nn import functional as F
 nltk.download("wordnet")
 
 
-def compute_metric(metric, candidate_text, reference_text, **kwargs):
+def compute_metric(metric, candidate_text, reference_text, beta=8):
     # ROUGE-N
     m = re.match(r"^rouge(\d+)$", metric, re.I)
     if m:
@@ -38,7 +38,7 @@ def compute_metric(metric, candidate_text, reference_text, **kwargs):
         recall = scores[metric].recall
         if precision + recall == 0:
             return 0.0
-        beta2 = kwargs["beta"] ** 2
+        beta2 = beta**2
         return (1 + beta2) * precision * recall / (beta2 * precision + recall)
 
     # BLEU
