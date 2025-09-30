@@ -8,6 +8,7 @@ from tokenizers.implementations import ByteLevelBPETokenizer
 from torch.utils.data import DataLoader
 
 from dataset import CNNDailyMailDataset, DynamicBatchSampler, collate_fn
+from display import detect_runtime_env, try_set_window_position
 from neural_intra_attention_model import NeuralIntraAttentionModel
 from pointer_generator_network import PointerGeneratorNetwork
 from tokenization import PointerGeneratorTokenizer
@@ -16,14 +17,18 @@ from utils import name_to_latex, set_seed
 
 logging.getLogger("datasets").setLevel(logging.ERROR)
 
-MODEL = "TRANSFORMER"
+MODEL = "POINTER_GENERATOR_NETWORK"
 NUM_EPOCHS = 2
 MAX_TOKENS_EACH_BATCH = 3000
 DATASET_LENGTH = 15
 NUM_FOLDS = 4
 DEVICE = "cpu"
-LOSS_LOG_MODE = "console"
+LOSS_LOG_MODE = "graph"
 LOSS_LOG_INTERVAL = 3
+ENV = detect_runtime_env()
+
+if ENV in ("colab", "notebook"):
+    from IPython.display import clear_output, display
 
 if __name__ == "__main__":
     loss_log_file = open("loss_log.txt", "w")
@@ -44,8 +49,7 @@ if __name__ == "__main__":
             rows = math.ceil(n / cols)
 
             figure = plt.figure(figsize=(cols * 5, rows * 5))
-            manager = plt.get_current_fig_manager()
-            manager.window.wm_geometry("+50+50")
+            try_set_window_position(0, 0)
             axes = figure.subplots(rows, cols)
             if type(axes) == np.ndarray:
                 axes = axes.flatten()[:n]
