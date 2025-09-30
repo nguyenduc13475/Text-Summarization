@@ -44,6 +44,8 @@ if __name__ == "__main__":
 
         if LOSS_LOG_MODE == "graph":
             plt.close("all")
+            if ENV in ("colab", "notebook"):
+                clear_output(wait=True)
             n = fold + 1
             cols = math.ceil(math.sqrt(n))
             rows = math.ceil(n / cols)
@@ -62,12 +64,17 @@ if __name__ == "__main__":
                         axes[i].plot(loss_values, label=name_to_latex[loss_type])
                     axes[i].legend()
                 axes[i].set_xlabel("Batch/Epoch Progress")
-                axes[i].set_ylabel("Loss")
+                axes[i].set_ylabel("Average Loss Per Token")
                 axes[i].set_title(f"Fold {i} Loss Curves")
                 axes[i].grid(True)
 
             figure.tight_layout(pad=2.0)
-            plt.pause(0.01)
+
+            match ENV:
+                case "colab" | "notebook":
+                    display(figure)
+                case "gui":
+                    plt.pause(0.01)
 
             line_2ds = defaultdict(lambda: None)
 
@@ -154,7 +161,9 @@ if __name__ == "__main__":
 
                     for loss_type, loss_value in losses.items():
                         batch_loss_history[loss_type].append(loss_value)
-                        epoch_loss_history[loss_type].append(loss_value)
+                        epoch_loss_history[loss_type].append(
+                            loss_value / batch_num_tokens
+                        )
 
                     if (
                         split == "train"
@@ -188,6 +197,9 @@ if __name__ == "__main__":
                                 axes[-1].autoscale()
                                 figure.canvas.draw()
                                 figure.canvas.flush_events()
+                                if ENV in ("colab", "notebook"):
+                                    clear_output(wait=True)
+                                    display(figure)
 
                 average_loss_per_token = (
                     sum(batch_loss_history["total_loss"]) / epoch_num_tokens
