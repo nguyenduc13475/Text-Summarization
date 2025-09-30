@@ -1,4 +1,5 @@
 import re
+import warnings
 
 import bert_score
 import nltk
@@ -59,9 +60,11 @@ def compute_metric(metric, candidate_text, reference_text, beta=8):
 
     # BERTScore
     if metric == "bertscore":
-        _, _, F1 = bert_score.score(
-            [candidate_text], [reference_text], lang="en", verbose=False
-        )
+        with warnings.catch_warnings():
+            warnings.filterwarnings("ignore", message="Some weights.*pooler")
+            _, _, F1 = bert_score.score(
+                [candidate_text], [reference_text], lang="en", verbose=False
+            )
         return float(F1.mean())
 
     # MoverScore
