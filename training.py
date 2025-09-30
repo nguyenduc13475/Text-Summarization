@@ -15,24 +15,30 @@ from neural_intra_attention_model import NeuralIntraAttentionModel
 from pointer_generator_network import PointerGeneratorNetwork
 from tokenization import PointerGeneratorTokenizer
 from transformer import Transformer
-from utils import print_log_file, set_seed, token_ids_to_text
+from utils import (
+    load_checkpoint,
+    print_log_file,
+    save_checkpoint,
+    set_seed,
+    token_ids_to_text,
+)
 
 set_seed()
 
-MODEL = "POINTER_GENERATOR_NETWORK"
+MODEL = "NEURAL_INTRA_ATTENTION_MODEL"
 CHECKPOINT_FOLDER = f"{MODEL.lower()}_checkpoints"
 NUM_EPOCHS = 2
 MAX_TOKENS_EACH_BATCH = 3000
 TRAIN_DATASET_LENGTH = 15
 VALIDATION_DATASET_LENGTH = 10
-CONTINUE_TRAINING = False
+CONTINUE_TRAINING = True
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 LOSS_LOG_MODE = "console"
 LOSS_LOG_INTERVAL = 3
 ENV = detect_runtime_env()
-METRICS = ["rouge1", "rouge2", "rougeL", "bleu4", "meteor", "bertscore", "moverscore"]
-MODEL_SAVE_INTERVAL = 10
-CHECKPOINT_INTERVAL = 10
+METRICS = ["rouge1", "rouge2"]
+MODEL_SAVE_INTERVAL = 2
+CHECKPOINT_INTERVAL = 3
 
 if ENV in ("colab", "notebook"):
     from IPython.display import clear_output, display
@@ -124,45 +130,46 @@ if __name__ == "__main__":
         ),
     }
 
+    match MODEL:
+        case "POINTER_GENERATOR_NETWORK":
+            model = PointerGeneratorNetwork(
+                tokenizer=tokenizer,
+                embedding_dim=128,
+                encoder_hidden_dim=160,
+                decoder_hidden_dim=196,
+                attention_dim=224,
+                bottle_neck_dim=56,
+                cov_loss_factor=0.75,
+                learning_rate=1e-3,
+                device=DEVICE,
+            )
+        case "NEURAL_INTRA_ATTENTION_MODEL":
+            model = NeuralIntraAttentionModel(
+                tokenizer=tokenizer,
+                embedding_dim=128,
+                hidden_dim=160,
+                rl_loss_factor=0.75,
+                learning_rate=1e-4,
+                device=DEVICE,
+            )
+        case "TRANSFORMER":
+            model = Transformer(
+                tokenizer=tokenizer,
+                d_model=128,
+                nhead=8,
+                num_layers=2,
+                learning_rate=1e-3,
+                device=DEVICE,
+            )
+
     checkpoint_file, checkpoint_idx = find_latest_checkpoint()
 
     if CONTINUE_TRAINING and checkpoint_file is not None:
-        model = torch.load(checkpoint_file)
+        load_checkpoint(model, checkpoint_file, map_location=DEVICE)
         print("Model loaded successfully!")
     else:
         clear_checkpoint_folder()
-
-        match MODEL:
-            case "POINTER_GENERATOR_NETWORK":
-                model = PointerGeneratorNetwork(
-                    tokenizer=tokenizer,
-                    embedding_dim=128,
-                    encoder_hidden_dim=160,
-                    decoder_hidden_dim=196,
-                    attention_dim=224,
-                    bottle_neck_dim=56,
-                    cov_loss_factor=0.75,
-                    learning_rate=1e-3,
-                    device=DEVICE,
-                )
-            case "NEURAL_INTRA_ATTENTION_MODEL":
-                model = NeuralIntraAttentionModel(
-                    tokenizer=tokenizer,
-                    embedding_dim=128,
-                    hidden_dim=160,
-                    rl_loss_factor=0.75,
-                    learning_rate=1e-4,
-                    device=DEVICE,
-                )
-            case "TRANSFORMER":
-                model = Transformer(
-                    tokenizer=tokenizer,
-                    d_model=128,
-                    nhead=8,
-                    num_layers=2,
-                    learning_rate=1e-3,
-                    device=DEVICE,
-                )
+        checkpoint_idx = -1
 
     epoch_loss_history = defaultdict(lambda: defaultdict(list))
     metric_history = defaultdict(list)
@@ -253,7 +260,7 @@ if __name__ == "__main__":
                     and MODEL_SAVE_INTERVAL is not None
                     and batch_idx % MODEL_SAVE_INTERVAL == 0
                 ):
-                    torch.save(
+                    save_checkpoint(
                         model, f"{CHECKPOINT_FOLDER}/checkpoint{checkpoint_idx + 1}.pt"
                     )
                     save_count += 1
@@ -261,11 +268,11 @@ if __name__ == "__main__":
                         f"Model saved successfully! (Check point {checkpoint_idx + 1})"
                     )
 
-                if (
-                    CHECKPOINT_INTERVAL is not None
-                    and save_count % CHECKPOINT_INTERVAL == 0
-                ):
-                    checkpoint_idx += 1
+                    if (
+                        CHECKPOINT_INTERVAL is not None
+                        and save_count % CHECKPOINT_INTERVAL == 0
+                    ):
+                        checkpoint_idx += 1
 
             for loss_type, loss_values in batch_loss_history.items():
                 epoch_loss_history[split][loss_type].append(
