@@ -70,6 +70,7 @@ class NeuralIntraAttentionModel(nn.Module):
         self.pad_token = tokenizer.token_to_id("<pad>")
         self.tokenizer = tokenizer
         self.out_bias = nn.Parameter(torch.randn(self.vocab_size - self.end_token))
+        self.device = torch.device(device)
 
         self.to(device)
         self.optimizer = optim.Adam(self.parameters(), lr=learning_rate)
@@ -85,6 +86,11 @@ class NeuralIntraAttentionModel(nn.Module):
         max_reinforce_length=100,
         target_texts=None,
     ):
+        batch_input_ids = batch_input_ids.to(self.device)
+        batch_target_ids = batch_target_ids.to(self.device)
+        if input_lengths is not None:
+            input_lengths = input_lengths.to(self.device)
+
         max_num_oovs = 0
         for oov_list in oov_lists:
             if len(oov_list) > max_num_oovs:
@@ -99,7 +105,7 @@ class NeuralIntraAttentionModel(nn.Module):
         batch_embeddings = self.embedding_layer(
             torch.where(
                 batch_input_ids >= self.vocab_size,
-                torch.tensor(self.unknown_token),
+                torch.tensor(self.unknown_token, device=self.device),
                 batch_input_ids,
             )
         )
@@ -109,7 +115,7 @@ class NeuralIntraAttentionModel(nn.Module):
             _,
         ) = self.encoder(batch_embeddings)
 
-        nll_losses = torch.zeros(batch_size)
+        nll_losses = torch.zeros(batch_size, device=self.device)
 
         sampling_sequence_metrics = []
         greedy_sequence_metrics = []
@@ -133,23 +139,31 @@ class NeuralIntraAttentionModel(nn.Module):
             decoder_hidden_states = encoder_final_hidden_states.transpose(1, 0).reshape(
                 encoder_final_hidden_states.shape[1], -1
             )
-            decoder_cell_states = torch.zeros(batch_size, self.hidden_dim * 2)
-            current_tokens = torch.tensor([self.start_token] * batch_size)
+            decoder_cell_states = torch.zeros(
+                batch_size, self.hidden_dim * 2, device=self.device
+            )
+            current_tokens = torch.tensor(
+                [self.start_token] * batch_size, device=self.device
+            )
             batch_cummulative_encoder_attention_scores = torch.zeros(
-                batch_size, max_input_length
+                batch_size, max_input_length, device=self.device
             )
             previous_decoder_hidden_states = torch.empty(
-                batch_size, 0, self.hidden_dim * 2
+                batch_size, 0, self.hidden_dim * 2, device=self.device
             )
 
             if mode["name"] in ["sampling", "greedy"]:
-                is_continues = torch.ones(batch_size)
+                is_continues = torch.ones(batch_size, device=self.device)
 
             if mode["name"] == "sampling":
-                cummulative_sampling_log_probs = torch.zeros(batch_size)
-                sampling_sequences = torch.empty(batch_size, 0).long()
+                cummulative_sampling_log_probs = torch.zeros(
+                    batch_size, device=self.device
+                )
+                sampling_sequences = torch.empty(
+                    batch_size, 0, device=self.device
+                ).long()
             elif mode["name"] == "greedy":
-                greedy_sequences = torch.empty(batch_size, 0).long()
+                greedy_sequences = torch.empty(batch_size, 0, device=self.device).long()
 
             for t in range(mode["max_steps"]):
                 current_embeddings = self.embedding_layer(current_tokens)
@@ -186,7 +200,7 @@ class NeuralIntraAttentionModel(nn.Module):
 
                 if t == 0:
                     decoder_context_vectors = torch.zeros(
-                        batch_size, self.hidden_dim * 2
+                        batch_size, self.hidden_dim * 2, device=self.device
                     )
                 else:
                     batch_decoder_attention_scores = (
@@ -222,7 +236,7 @@ class NeuralIntraAttentionModel(nn.Module):
                     next_tokens = batch_target_ids[:, t]
                     current_tokens = torch.where(
                         next_tokens >= self.vocab_size,
-                        torch.tensor(self.unknown_token),
+                        torch.tensor(self.unknown_token, device=self.device),
                         next_tokens,
                     )
                     next_token_probs = p_gens * F.pad(
@@ -256,7 +270,9 @@ class NeuralIntraAttentionModel(nn.Module):
                         final_distributions, num_samples=1
                     ).squeeze(1)
                     next_token_log_probs = torch.log(
-                        final_distributions[torch.arange(batch_size), next_tokens]
+                        final_distributions[
+                            torch.arange(batch_size, device=self.device), next_tokens
+                        ]
                         + 1e-9
                     )
                     cummulative_sampling_log_probs = (
@@ -266,7 +282,7 @@ class NeuralIntraAttentionModel(nn.Module):
                     is_continues = is_continues * (next_tokens != self.end_token)
                     current_tokens = torch.where(
                         next_tokens >= self.vocab_size,
-                        torch.tensor(self.unknown_token),
+                        torch.tensor(self.unknown_token, device=self.device),
                         next_tokens,
                     )
 
@@ -291,7 +307,7 @@ class NeuralIntraAttentionModel(nn.Module):
                     is_continues = is_continues * (next_tokens != self.end_token)
                     current_tokens = torch.where(
                         next_tokens >= self.vocab_size,
-                        torch.tensor(self.unknown_token),
+                        torch.tensor(self.unknown_token, device=self.device),
                         next_tokens,
                     )
 
@@ -366,8 +382,8 @@ class NeuralIntraAttentionModel(nn.Module):
 
         rl_loss = (
             (
-                torch.tensor(greedy_sequence_metrics)
-                - torch.tensor(sampling_sequence_metrics)
+                torch.tensor(greedy_sequence_metrics, device=self.device)
+                - torch.tensor(sampling_sequence_metrics, device=self.device)
             )
             * cummulative_sampling_log_probs
         ).sum()
@@ -427,13 +443,15 @@ class NeuralIntraAttentionModel(nn.Module):
         return_attention=False,
         return_embedding=False,
     ):
+        input_ids = input_ids.to(self.device)
+
         num_oovs = (
             max(input_ids.max().item(), self.vocab_size - 1) - self.vocab_size + 1
         )
         embeddings = self.embedding_layer(
             torch.where(
                 input_ids >= self.vocab_size,
-                torch.tensor(self.unknown_token),
+                torch.tensor(self.unknown_token, device=self.device),
                 input_ids,
             )
         )
@@ -448,7 +466,7 @@ class NeuralIntraAttentionModel(nn.Module):
             nonlocal out_proj, return_attention
             new_state = dict()
             current_embedding = self.embedding_layer(
-                torch.tensor(state["sequence"][-1])
+                torch.tensor(state["sequence"][-1], device=self.device)
             )
             new_state["decoder_hidden_state"], new_state["decoder_cell_state"] = (
                 self.decoder_cell(
@@ -476,7 +494,9 @@ class NeuralIntraAttentionModel(nn.Module):
             )
 
             if len(state["sequence"]) == 1:
-                decoder_context_vector = torch.zeros(self.hidden_dim * 2)
+                decoder_context_vector = torch.zeros(
+                    self.hidden_dim * 2, device=self.device
+                )
             else:
                 decoder_attention_scores = (
                     new_state["decoder_hidden_state"]
@@ -538,9 +558,15 @@ class NeuralIntraAttentionModel(nn.Module):
             predictor=predictor,
             start_state={
                 "decoder_hidden_state": encoder_final_hidden_state.reshape(-1),
-                "decoder_cell_state": torch.zeros(self.hidden_dim * 2),
-                "cummulative_encoder_attention_scores": torch.zeros(len(input_ids)),
-                "decoder_hidden_states": torch.empty(0, self.hidden_dim * 2),
+                "decoder_cell_state": torch.zeros(
+                    self.hidden_dim * 2, device=self.device
+                ),
+                "cummulative_encoder_attention_scores": torch.zeros(
+                    len(input_ids), device=self.device
+                ),
+                "decoder_hidden_states": torch.empty(
+                    0, self.hidden_dim * 2, device=self.device
+                ),
                 "sequence": [self.start_token],
             }
             | (

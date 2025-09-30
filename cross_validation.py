@@ -4,6 +4,7 @@ from collections import defaultdict
 
 import matplotlib.pyplot as plt
 import numpy as np
+import torch
 from tokenizers.implementations import ByteLevelBPETokenizer
 from torch.utils.data import DataLoader
 
@@ -22,8 +23,8 @@ NUM_EPOCHS = 2
 MAX_TOKENS_EACH_BATCH = 3000
 DATASET_LENGTH = 15
 NUM_FOLDS = 4
-DEVICE = "cpu"
-LOSS_LOG_MODE = "graph"
+DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
+LOSS_LOG_MODE = "console"
 LOSS_LOG_INTERVAL = 3
 ENV = detect_runtime_env()
 
@@ -124,6 +125,7 @@ if __name__ == "__main__":
                 batch_sampler=DynamicBatchSampler(
                     ds, max_tokens=MAX_TOKENS_EACH_BATCH, shuffle=True
                 ),
+                pin_memory=True,
             )
 
             batch_step = (

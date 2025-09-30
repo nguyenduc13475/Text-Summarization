@@ -30,7 +30,7 @@ class EmbeddingLayer(nn.Module):
     def forward(self, input_ids):
         return self.embedding(input_ids) + self.positional_encoding(
             input_ids.shape[-1], self.embedding_dim
-        )
+        ).to(input_ids.device)
 
 
 class EncoderLayerWithAttn(nn.Module):
@@ -200,6 +200,7 @@ class Transformer(nn.Module):
             num_layers=num_layers,
         )
         self.out_proj = nn.Linear(d_model, self.vocab_size - self.end_token)
+        self.device = torch.device(device)
 
         self.to(device)
         self.optimizer = optim.Adam(self.parameters(), lr=learning_rate)
@@ -210,26 +211,37 @@ class Transformer(nn.Module):
         return mask.float().masked_fill(mask, float("-inf"))
 
     def compute_loss(self, batch_input_ids, batch_target_ids):
+        batch_input_ids = batch_input_ids.to(self.device)
+        batch_target_ids = batch_target_ids.to(self.device)
+
         batch_size = batch_input_ids.shape[0]
         max_target_length = batch_target_ids.shape[1]
         batch_input_ids = torch.where(
             batch_input_ids >= self.vocab_size,
-            torch.tensor(self.unknown_token),
+            torch.tensor(self.unknown_token, device=self.device),
             batch_input_ids,
         )
         batch_target_ids = torch.where(
             batch_target_ids >= self.vocab_size,
-            torch.tensor(self.unknown_token),
+            torch.tensor(self.unknown_token, device=self.device),
             batch_target_ids,
         )
         batch_current_tokens = torch.cat(
-            [torch.full((batch_size, 1), self.start_token), batch_target_ids], dim=1
+            [
+                torch.full((batch_size, 1), self.start_token, device=self.device),
+                batch_target_ids,
+            ],
+            dim=1,
         )
         batch_next_tokens = torch.cat(
-            [batch_target_ids, torch.full((batch_size, 1), self.pad_token)], dim=1
+            [
+                batch_target_ids,
+                torch.full((batch_size, 1), self.pad_token, device=self.device),
+            ],
+            dim=1,
         )
         batch_next_tokens[
-            torch.arange(batch_size),
+            torch.arange(batch_size, device=self.device),
             (batch_next_tokens == self.pad_token).int().argmax(dim=1),
         ] = self.end_token
 
@@ -238,7 +250,7 @@ class Transformer(nn.Module):
 
         causal_mask = nn.Transformer.generate_square_subsequent_mask(
             max_target_length + 1
-        )
+        ).to(self.device)
         input_padding_mask = self.make_padding_mask(batch_input_ids)
         current_token_padding_mask = self.make_padding_mask(batch_current_tokens)
 
@@ -300,7 +312,7 @@ class Transformer(nn.Module):
         input_embeddings = self.embedding_layer(
             torch.where(
                 input_ids >= self.vocab_size,
-                torch.tensor(self.unknown_token),
+                torch.tensor(self.unknown_token, device=self.device),
                 input_ids,
             )
         )
@@ -356,7 +368,7 @@ class Transformer(nn.Module):
             predictor=predictor,
             start_state={
                 "current_output_embeddings": self.embedding_layer(
-                    torch.tensor([self.start_token])
+                    torch.tensor([self.start_token], device=self.device)
                 ),
                 "sequence": [self.start_token],
             }

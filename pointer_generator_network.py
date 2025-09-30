@@ -71,7 +71,7 @@ class PointerGeneratorNetwork(nn.Module):
         self.end_token = tokenizer.token_to_id("</s>")
         self.pad_token = tokenizer.token_to_id("<pad>")
         self.vocab_proj_2 = nn.Linear(bottle_neck_dim, self.vocab_size - self.end_token)
-
+        self.device = torch.device(device)
         self.apply(init_weights)
         self.to(device)
         self.optimizer = optim.Adam(self.parameters(), lr=learning_rate)
@@ -81,6 +81,11 @@ class PointerGeneratorNetwork(nn.Module):
     def compute_loss(
         self, batch_input_ids, batch_target_ids, oov_lists, input_lengths=None
     ):
+        batch_input_ids = batch_input_ids.to(self.device)
+        batch_target_ids = batch_target_ids.to(self.device)
+        if input_lengths is not None:
+            input_lengths = input_lengths.to(self.device)
+
         max_num_oovs = 0
         for oov_list in oov_lists:
             if len(oov_list) > max_num_oovs:
@@ -92,7 +97,7 @@ class PointerGeneratorNetwork(nn.Module):
         batch_embeddings = self.embedding_layer(
             torch.where(
                 batch_input_ids >= self.vocab_size,
-                torch.tensor(self.unknown_token),
+                torch.tensor(self.unknown_token, device=self.device),
                 batch_input_ids,
             )
         )
@@ -111,11 +116,13 @@ class PointerGeneratorNetwork(nn.Module):
         decoder_hidden_states = self.enc_to_dec_hidden(encoder_final_hidden_states)
         decoder_cell_states = self.enc_to_dec_cell(encoder_final_cell_states)
 
-        coverage_vectors = torch.zeros(batch_size, max_input_length)
-        current_tokens = torch.tensor([self.start_token] * batch_size)
+        coverage_vectors = torch.zeros(batch_size, max_input_length, device=self.device)
+        current_tokens = torch.tensor(
+            [self.start_token] * batch_size, device=self.device
+        )
 
-        nll_losses = torch.zeros(batch_size)
-        cov_losses = torch.zeros(batch_size)
+        nll_losses = torch.zeros(batch_size, device=self.device)
+        cov_losses = torch.zeros(batch_size, device=self.device)
 
         for t in range(max_target_length):
             current_embeddings = self.embedding_layer(current_tokens)
@@ -153,7 +160,7 @@ class PointerGeneratorNetwork(nn.Module):
             next_tokens = batch_target_ids[:, t]
             current_tokens = torch.where(
                 next_tokens >= self.vocab_size,
-                torch.tensor(self.unknown_token),
+                torch.tensor(self.unknown_token, device=self.device),
                 next_tokens,
             )
             next_token_probs = p_gens * F.pad(
@@ -209,13 +216,15 @@ class PointerGeneratorNetwork(nn.Module):
         return_attention=False,
         return_embedding=False,
     ):
+        input_ids = input_ids.to(self.device)
+
         num_oovs = (
             max(input_ids.max().item(), self.vocab_size - 1) - self.vocab_size + 1
         )
         embeddings = self.embedding_layer(
             torch.where(
                 input_ids >= self.vocab_size,
-                torch.tensor(self.unknown_token),
+                torch.tensor(self.unknown_token, device=self.device),
                 input_ids,
             )
         )
@@ -231,7 +240,7 @@ class PointerGeneratorNetwork(nn.Module):
             nonlocal return_attention
             new_state = dict()
             current_embedding = self.embedding_layer(
-                torch.tensor(state["sequence"][-1])
+                torch.tensor(state["sequence"][-1], device=self.device)
             )
             new_state["decoder_hidden_state"], new_state["decoder_cell_state"] = (
                 self.decoder_cell(
@@ -291,7 +300,7 @@ class PointerGeneratorNetwork(nn.Module):
                     encoder_final_hidden_state
                 ),
                 "decoder_cell_state": self.enc_to_dec_cell(encoder_final_cell_state),
-                "coverage_vector": torch.zeros(len(input_ids)),
+                "coverage_vector": torch.zeros(len(input_ids), device=self.device),
                 "sequence": [self.start_token],
             }
             | (
