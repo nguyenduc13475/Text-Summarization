@@ -11,8 +11,6 @@ from rouge_score import rouge_scorer
 from sentence_transformers import SentenceTransformer
 from torch.nn import functional as F
 
-from utils import suppress_print
-
 nltk.download("wordnet", quiet=True)
 
 
