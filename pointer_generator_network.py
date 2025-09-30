@@ -240,7 +240,9 @@ class PointerGeneratorNetwork(nn.Module):
             nonlocal return_attention
             new_state = dict()
             current_embedding = self.embedding_layer(
-                torch.tensor(state["sequence"][-1], device=self.device)
+                torch.tensor(
+                    min(state["sequence"][-1], self.vocab_size - 1), device=self.device
+                )
             )
             new_state["decoder_hidden_state"], new_state["decoder_cell_state"] = (
                 self.decoder_cell(
