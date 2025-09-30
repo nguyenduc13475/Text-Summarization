@@ -25,7 +25,7 @@ from utils import (
 
 set_seed()
 
-MODEL = "NEURAL_INTRA_ATTENTION_MODEL"
+MODEL = "TRANSFORMER"
 CHECKPOINT_FOLDER = f"{MODEL.lower()}_checkpoints"
 NUM_EPOCHS = 2
 MAX_TOKENS_EACH_BATCH = 3000
