@@ -15,7 +15,7 @@ from neural_intra_attention_model import NeuralIntraAttentionModel
 from pointer_generator_network import PointerGeneratorNetwork
 from tokenization import PointerGeneratorTokenizer
 from transformer import Transformer
-from utils import set_seed, token_ids_to_text
+from utils import print_log_file, set_seed, token_ids_to_text
 
 set_seed()
 
@@ -280,15 +280,13 @@ if __name__ == "__main__":
                 case "file":
                     loss_log_file.write(log + "\n")
 
-        log = f"Validation metrics at epoch {epoch} :"
-        print(log)
-        loss_log_file.write(log + "\n")
+        print_log_file("=================================================")
+        print_log_file(f"Validation metrics at epoch {epoch} :")
         for metric, values in metrics.items():
             metrics[metric] = sum(values) / len(values)
-            log = f"{metric.upper()} : {metrics[metric]}"
-            print(log)
-            loss_log_file.write(log + "\n")
+            print_log_file(f"{metric.upper()} : {metrics[metric]}")
             metric_history[metric].append(metrics[metric])
+        print_log_file("=================================================")
 
         if LOSS_LOG_MODE == "graph":
             # chồng thêm validation loss lên plot của train loss

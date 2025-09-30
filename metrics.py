@@ -1,4 +1,5 @@
 import re
+import warnings
 
 import bert_score
 import nltk
@@ -61,10 +62,12 @@ def compute_metric(metric, candidate_text, reference_text, beta=8):
 
     # BERTScore
     if metric == "bertscore":
-        with suppress_print():
-            _, _, F1 = bert_score.score(
-                [candidate_text], [reference_text], lang="en", verbose=False
-            )
+        warnings.filterwarnings(
+            "ignore", message="Some weights of RobertaModel were not initialized*"
+        )
+        _, _, F1 = bert_score.score(
+            [candidate_text], [reference_text], lang="en", verbose=False
+        )
         return float(F1.mean())
 
     # MoverScore
