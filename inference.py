@@ -1,19 +1,13 @@
 import os
 import re
-import shutil
 
 import matplotlib.pyplot as plt
-import numpy as np
 import torch
 from sklearn.manifold import TSNE
 from torch.utils.data import DataLoader
 
-from dataset import CNNDailyMailDataset, DynamicBatchSampler, collate_fn
-from metrics import compute_metric
-from neural_intra_attention_model import NeuralIntraAttentionModel
-from pointer_generator_network import PointerGeneratorNetwork
+from dataset import CNNDailyMailDataset, collate_fn
 from text_rank import text_rank_summarize
-from transformer import Transformer
 from utils import pad_and_stack, token_ids_to_text
 
 MODELS = [
@@ -21,7 +15,7 @@ MODELS = [
     "POINTER_GENERATOR_NETWORK",
     "NEURAL_INTRA_ATTENTION_MODEL",
     "TRANSFORMER",
-]  # có thể rút về mảng 1 phần tử nếu không muốn so sánh
+]
 DEVICE = "cpu"
 ATTENTION_PLOT = True
 EMBEDDING_PLOT = True
@@ -51,13 +45,11 @@ def find_latest_checkpoint(checkpoint_folder):
 
 
 def plot_attention_heatmap(attention_distributions, output_tokens, input_tokens):
-    # Ghép list thành ma trận (num_summary_tokens, num_input_tokens)
     attn_matrix = attention_distributions.detach().cpu().numpy()
 
     plt.figure(figsize=(max(6, len(input_tokens) * 0.5), max(4, len(summary) * 0.5)))
     plt.imshow(attn_matrix, aspect="auto", cmap="viridis")
 
-    # tick labels
     plt.xticks(range(len(input_tokens)), input_tokens, rotation=90)
     plt.yticks(range(len(output_tokens)), output_tokens)
 
@@ -69,26 +61,20 @@ def plot_attention_heatmap(attention_distributions, output_tokens, input_tokens)
     plt.show()
 
 
-# sample size là số token hiển thị
 def plot_tsne_embeddings(embeddings, tokens, sample_size=300):
-    # Convert sang numpy
     X = embeddings.detach().cpu().numpy()
 
-    # Nếu quá nhiều token thì lấy sample ngẫu nhiên để plot cho đỡ rối
     if sample_size and len(tokens) > sample_size:
         idx = torch.randperm(len(tokens))[:sample_size].tolist()
         X = X[idx]
         tokens = [tokens[i] for i in idx]
 
-    # t-SNE reduction 128D -> 2D
     tsne = TSNE(n_components=2, random_state=42, perplexity=30, init="pca")
     X_2d = tsne.fit_transform(X)
 
-    # Vẽ scatter plot
     plt.figure(figsize=(10, 8))
     plt.scatter(X_2d[:, 0], X_2d[:, 1], s=20, alpha=0.6)
 
-    # Annotate token (nếu sample nhỏ)
     if len(tokens) <= 50:
         for i, token in enumerate(tokens):
             plt.annotate(token, (X_2d[i, 0], X_2d[i, 1]), fontsize=8, alpha=0.7)
@@ -98,14 +84,16 @@ def plot_tsne_embeddings(embeddings, tokens, sample_size=300):
 
 
 if __name__ == "__main__":
-    dummy_ds = CNNDailyMailDataset([{"article": INPUT_TEXT, "highlight": ""}])
-    dummy_loader = DataLoader(
-        dummy_ds,
+    singleton_ds = CNNDailyMailDataset(
+        split=None, dataset=[{"article": INPUT_TEXT, "highlights": ""}]
+    )
+    singleton_loader = DataLoader(
+        singleton_ds,
         collate_fn=collate_fn,
     )
-    for batch in dummy_loader:
-        input_ids = batch["input_ids"][0]
-        oov_list = batch["oov_lists"][0]
+    singleton_batch = next(iter(singleton_loader))
+    input_ids = singleton_batch["input_ids"][0]
+    oov_list = singleton_batch["oov_lists"][0]
 
     for MODEL in MODELS:
         if MODEL != "TEXT_RANK":
@@ -124,17 +112,17 @@ if __name__ == "__main__":
             )
             output_ids = output[0]
             summary, output_tokens = token_ids_to_text(
-                dummy_ds.tokenizer,
+                singleton_ds.tokenizer,
                 output_ids,
                 oov_list,
-                dummy_ds.vocab_size,
+                singleton_ds.vocab_size,
                 return_output="both",
             )
             input_tokens = token_ids_to_text(
-                dummy_ds.tokenizer,
+                singleton_ds.tokenizer,
                 input_ids,
                 oov_list,
-                dummy_ds.vocab_size,
+                singleton_ds.vocab_size,
                 return_output="list",
             )
 

@@ -46,7 +46,6 @@ class EncoderLayerWithAttn(nn.Module):
         self.dropout2 = nn.Dropout(dropout)
 
     def forward(self, src, src_mask=None, src_key_padding_mask=None):
-        # self-attention
         attn_out, attn_weights = self.self_attn(
             src,
             src,
@@ -58,7 +57,6 @@ class EncoderLayerWithAttn(nn.Module):
         )
         src = src + self.dropout1(attn_out)
         src = self.norm1(src)
-        # feed forward
         ff = self.linear2(self.dropout(F.relu(self.linear1(src))))
         src = src + self.dropout2(ff)
         src = self.norm2(src)
@@ -69,9 +67,7 @@ class DecoderLayerWithAttn(nn.Module):
     def __init__(self, d_model, nhead, dim_feedforward=2048, dropout=0.1):
         super().__init__()
         self.self_attn = nn.MultiheadAttention(d_model, nhead, batch_first=True)
-        self.multihead_attn = nn.MultiheadAttention(
-            d_model, nhead, batch_first=True
-        )  # cross-attn
+        self.multihead_attn = nn.MultiheadAttention(d_model, nhead, batch_first=True)
         self.linear1 = nn.Linear(d_model, dim_feedforward)
         self.dropout = nn.Dropout(dropout)
         self.linear2 = nn.Linear(dim_feedforward, d_model)
@@ -91,7 +87,6 @@ class DecoderLayerWithAttn(nn.Module):
         tgt_key_padding_mask=None,
         memory_key_padding_mask=None,
     ):
-        # tgt self-attention
         tgt2, self_attn_weights = self.self_attn(
             tgt,
             tgt,
@@ -104,7 +99,6 @@ class DecoderLayerWithAttn(nn.Module):
         tgt = tgt + self.dropout1(tgt2)
         tgt = self.norm1(tgt)
 
-        # cross-attention: queries = tgt, keys/values = memory
         tgt2, cross_attn_weights = self.multihead_attn(
             tgt,
             memory,
@@ -117,12 +111,10 @@ class DecoderLayerWithAttn(nn.Module):
         tgt = tgt + self.dropout2(tgt2)
         tgt = self.norm2(tgt)
 
-        # feed forward
         ff = self.linear2(self.dropout(F.relu(self.linear1(tgt))))
         tgt = tgt + self.dropout3(ff)
         tgt = self.norm3(tgt)
 
-        # return output, self-attn, cross-attn
         return tgt, self_attn_weights, cross_attn_weights
 
 
@@ -141,7 +133,6 @@ class SimpleTransformer(nn.Module):
                 for _ in range(num_layers)
             ]
         )
-        # to be set after forward
         self.last_encoder_attn = None
         self.last_decoder_cross_attn = None
         self.last_decoder_self_attn = None
@@ -157,18 +148,15 @@ class SimpleTransformer(nn.Module):
         tgt_key_padding_mask=None,
         memory_key_padding_mask=None,
     ):
-        # src: (batch, src_len, d_model)  (we assume batch_first=True)
-        # tgt: (batch, tgt_len, d_model)
         memory = src
         enc_attn = None
         for layer in self.encoder_layers:
             memory, enc_attn = layer(memory, src_mask, src_key_padding_mask)
-        # memory is (batch, src_len, d_model)
-        self.last_encoder_attn = enc_attn  # (batch, heads, src_len, src_len) or None
+        self.last_encoder_attn = enc_attn
 
         out = tgt
         dec_cross_attn = None
-        dec_self_attn = None  # <-- thêm: container cho self-attn của layer cuối
+        dec_self_attn = None
         for layer in self.decoder_layers:
             out, self_attn, cross_attn = layer(
                 out,
@@ -178,22 +166,18 @@ class SimpleTransformer(nn.Module):
                 tgt_key_padding_mask=tgt_key_padding_mask,
                 memory_key_padding_mask=memory_key_padding_mask,
             )
-            dec_cross_attn = cross_attn  # last layer's cross-attn
-            dec_self_attn = self_attn  # <-- thêm: keep last layer's self-attn
+            dec_cross_attn = cross_attn
+            dec_self_attn = self_attn
 
         self.last_decoder_cross_attn = dec_cross_attn
-        self.last_decoder_self_attn = (
-            dec_self_attn  # <-- thêm: expose decoder self-attn
-        )
+        self.last_decoder_self_attn = dec_self_attn
 
-        # return decoder outputs (batch, tgt_len, d_model)
         return out
 
 
 class Transformer(nn.Module):
     def __init__(
         self,
-        vocab_size,
         tokenizer,
         d_model=512,
         nhead=8,
@@ -202,109 +186,113 @@ class Transformer(nn.Module):
         device="cpu",
     ):
         super().__init__()
-        self.vocab_size = vocab_size
+        self.vocab_size = tokenizer.get_vocab_size()
         self.start_token = tokenizer.token_to_id("<s>")
         self.end_token = tokenizer.token_to_id("</s>")
         self.pad_token = tokenizer.token_to_id("<pad>")
         self.unknown_token = tokenizer.token_to_id("<unk>")
         self.d_model = d_model
 
-        self.embedding_layer = EmbeddingLayer(vocab_size, d_model)
+        self.embedding_layer = EmbeddingLayer(self.vocab_size, d_model)
         self.transformer = SimpleTransformer(
             d_model=d_model,
             nhead=nhead,
             num_layers=num_layers,
         )
-        self.out_proj = nn.Linear(d_model, vocab_size)
+        self.out_proj = nn.Linear(d_model, self.vocab_size - self.end_token)
 
+        self.to(device)
         self.optimizer = optim.Adam(self.parameters(), lr=learning_rate)
+        self.loss_scale = 1e-2
 
-    def make_padding_mask(self, input_ids):
-        mask = input_ids.eq(self.pad_token)
+    def make_padding_mask(self, batch_input_ids):
+        mask = batch_input_ids.eq(self.pad_token)
         return mask.float().masked_fill(mask, float("-inf"))
 
-    def compute_loss(self, input_ids, labels, input_lengths=None):
-        batch_size = len(input_ids)
-        input_ids = torch.where(
-            input_ids >= self.vocab_size,
+    def compute_loss(self, batch_input_ids, batch_target_ids):
+        batch_size = batch_input_ids.shape[0]
+        max_target_length = batch_target_ids.shape[1]
+        batch_input_ids = torch.where(
+            batch_input_ids >= self.vocab_size,
             torch.tensor(self.unknown_token),
-            input_ids,
+            batch_input_ids,
         )
-        labels = torch.where(
-            labels >= self.vocab_size,
+        batch_target_ids = torch.where(
+            batch_target_ids >= self.vocab_size,
             torch.tensor(self.unknown_token),
-            labels,
+            batch_target_ids,
         )
-        current_output_ids = torch.cat(
-            [torch.full((batch_size, 1), self.start_token), labels], dim=1
+        batch_current_tokens = torch.cat(
+            [torch.full((batch_size, 1), self.start_token), batch_target_ids], dim=1
         )
-        next_output_ids = torch.cat(
-            [labels, torch.full((batch_size, 1), self.pad_token)], dim=1
+        batch_next_tokens = torch.cat(
+            [batch_target_ids, torch.full((batch_size, 1), self.pad_token)], dim=1
         )
-        next_output_ids[
+        batch_next_tokens[
             torch.arange(batch_size),
-            (next_output_ids == self.pad_token).int().argmax(dim=1),
+            (batch_next_tokens == self.pad_token).int().argmax(dim=1),
         ] = self.end_token
 
-        input_embeddings = self.embedding_layer(input_ids)
-        current_output_embeddings = self.embedding_layer(current_output_ids)
+        batch_input_embeddings = self.embedding_layer(batch_input_ids)
+        batch_current_token_embeddings = self.embedding_layer(batch_current_tokens)
 
         causal_mask = nn.Transformer.generate_square_subsequent_mask(
-            current_output_ids.shape[-1]
+            max_target_length + 1
         )
-        input_padding_mask = self.make_padding_mask(input_ids)
-        current_output_padding_mask = self.make_padding_mask(current_output_ids)
+        input_padding_mask = self.make_padding_mask(batch_input_ids)
+        current_token_padding_mask = self.make_padding_mask(batch_current_tokens)
 
-        next_output_embeddings = self.transformer(
-            input_embeddings,
-            current_output_embeddings,
+        next_token_embeddings = self.transformer(
+            batch_input_embeddings,
+            batch_current_token_embeddings,
             tgt_mask=causal_mask,
             src_key_padding_mask=input_padding_mask,
-            tgt_key_padding_mask=current_output_padding_mask,
+            tgt_key_padding_mask=current_token_padding_mask,
             memory_key_padding_mask=input_padding_mask,
         )
 
-        vocab_distribution = F.softmax(self.out_proj(next_output_embeddings), dim=2)
-        log_probs = torch.log(vocab_distribution + 1e-9)
+        batch_vocab_distributions = F.pad(
+            F.softmax(self.out_proj(next_token_embeddings), dim=2), (self.end_token, 0)
+        )
+        batch_log_probs = torch.log(batch_vocab_distributions + 1e-9)
 
         smoothing = 0.1
-        smooth_distribution = torch.zeros_like(vocab_distribution)
-        smooth_distribution.fill_(smoothing / (self.vocab_size - 1))
-        smooth_distribution.scatter_(2, next_output_ids.unsqueeze(2), 1.0 - smoothing)
-
-        smooth_distribution.masked_fill_(
-            next_output_ids.unsqueeze(2) == self.pad_token, 0.0
+        batch_target_distributions = torch.zeros_like(batch_vocab_distributions)
+        batch_target_distributions.fill_(smoothing / (self.vocab_size - 1))
+        batch_target_distributions.scatter_(
+            2, batch_next_tokens.unsqueeze(2), 1.0 - smoothing
         )
 
-        loss = (
-            F.kl_div(
-                log_probs,
-                smooth_distribution,
-                reduction="batchmean",
-            )
-            * 0.01
+        batch_target_distributions.masked_fill_(
+            batch_next_tokens.unsqueeze(2) == self.pad_token, 0.0
+        )
+
+        loss = F.kl_div(
+            batch_log_probs,
+            batch_target_distributions,
+            reduction="sum",
         )
 
         return {"total_loss": loss}
 
-    def train_one_batch(self, input_ids, labels, input_lengths=None):
-        losses = self.compute_loss(input_ids, labels, input_lengths)
+    def train_one_batch(self, batch_input_ids, batch_target_ids):
+        losses = self.compute_loss(batch_input_ids, batch_target_ids)
 
         self.optimizer.zero_grad()
-        losses["total_loss"].backward()
+        (losses["total_loss"] * self.loss_scale).backward()
         self.optimizer.step()
 
         return tensor_dict_to_scalar(losses)
 
-    def validate_one_batch(self, input_ids, labels, input_lengths=None):
+    def validate_one_batch(self, batch_input_ids, batch_target_ids):
         with torch.no_grad():
-            losses = self.compute_loss(input_ids, labels, input_lengths)
+            losses = self.compute_loss(batch_input_ids, batch_target_ids)
             return tensor_dict_to_scalar(losses)
 
     def infer(
         self,
         input_ids,
-        max_summary_length=100,
+        max_output_length=100,
         beam_width=4,
         return_attention=False,
         return_embedding=False,
@@ -317,28 +305,21 @@ class Transformer(nn.Module):
             )
         )
 
-        # helper to pick head-0 / batch-0 slice robustly
         def _pick_head0(att_tensor):
             if att_tensor is None:
                 return None
             at = att_tensor
-            # possible shapes: (batch, heads, t, s) or (heads, t, s) or (batch, t, s)
-            # prefer to return (t, s) for head 0.
             try:
-                # if (batch, heads, t, s) -> take batch 0, head 0 -> (t, s)
                 return at[0, 0].detach().cpu().clone()
             except Exception:
                 try:
-                    # if (heads, t, s) -> take head 0
                     return at[0].detach().cpu().clone()
                 except Exception:
                     try:
-                        # if (batch, t, s) -> take batch 0
                         return at[0].detach().cpu().clone()
                     except Exception:
                         return at.detach().cpu().clone()
 
-        # {current_output_embeddings}
         def predictor(state):
             nonlocal return_attention
             new_state = dict()
@@ -389,7 +370,7 @@ class Transformer(nn.Module):
                 else {}
             ),
             beam_width=beam_width,
-            max_state_length=max_summary_length,
+            max_state_length=max_output_length,
             end_state_indicator=lambda state: state["sequence"][-1] == self.end_token,
         )
 
@@ -412,5 +393,5 @@ class Transformer(nn.Module):
                 if return_attention
                 else {}
             )
-            | ({"embedding": input_embeddings} if return_embedding else None)
+            | ({"embedding": input_embeddings} if return_embedding else {})
         )

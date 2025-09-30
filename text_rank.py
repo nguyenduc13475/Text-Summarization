@@ -5,8 +5,8 @@ from nltk.tokenize import sent_tokenize
 from sklearn.feature_extraction.text import TfidfVectorizer
 
 dataset = load_dataset("abisee/cnn_dailymail", "3.0.0", split="test[:100]")
-nltk.download("punkt")
-nltk.download("punkt_tab")
+nltk.download("punkt", quiet=True)
+nltk.download("punkt_tab", quiet=True)
 
 
 def text_rank_summarize(article, top_sentences=3):

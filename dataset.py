@@ -12,15 +12,18 @@ class CNNDailyMailDataset(Dataset):
     def __init__(
         self,
         split="train",
-        vocab_file="vocab.json",
-        merges_file="merges.txt",
+        tokenizer=ByteLevelBPETokenizer("vocab.json", "merges.txt"),
         fold=None,
         num_folds=None,
         dataset=None,
+        dataset_length=None,
     ):
         super().__init__()
-        self.tokenizer = ByteLevelBPETokenizer(vocab_file, merges_file)
+        self.tokenizer = tokenizer
         self.vocab_size = self.tokenizer.get_vocab_size()
+
+        if split in ["train", "cross validation", "test", "validation"]:
+            full_ds = load_dataset("abisee/cnn_dailymail", "3.0.0")
 
         match split:
             case "train" | "cross validation":
@@ -35,8 +38,11 @@ class CNNDailyMailDataset(Dataset):
                 else:
                     raise ValueError("at least split or dataset must be valid!")
 
+        if dataset_length is not None:
+            full_ds = full_ds.select(range(dataset_length))
+
         if fold is not None and num_folds is not None:
-            total_size = len(self.ds)
+            total_size = len(full_ds)
             fold_size = math.ceil(total_size / num_folds)
             indices = list(range(total_size))
 
@@ -55,41 +61,44 @@ class CNNDailyMailDataset(Dataset):
 
     def __getitem__(self, idx):
         sample = self.ds[idx]
-        article, summary = sample["article"], sample["highlights"]
+        article, hightlights = sample["article"], sample["highlights"]
 
-        encoded_input = self.tokenizer.encode(article)
-        encoded_target = self.tokenizer.encode(summary)
+        encoded_article = self.tokenizer.encode(article)
+        encoded_hightlights = self.tokenizer.encode(hightlights)
 
         input_ids = []
-        labels = []
+        target_ids = []
         oov_list = []
 
-        for token_idx, token in zip(encoded_input.ids, encoded_input.tokens):
+        for token_idx, token in zip(encoded_article.ids, encoded_article.tokens):
             if token_idx == self.tokenizer.token_to_id("<unk>"):
-                token_oov_idx = oov_list.index(token)
-                if token_oov_idx == -1:
+                try:
+                    input_ids.append(self.vocab_size + oov_list.index(token))
+                except:
                     input_ids.append(self.vocab_size + len(oov_list))
                     oov_list.append(token)
-                else:
-                    input_ids.append(self.vocab_size + token_oov_idx)
+
             else:
                 input_ids.append(token_idx)
 
-        for token_idx, token in zip(encoded_target.ids, encoded_target.tokens):
+        for token_idx, token in zip(
+            encoded_hightlights.ids, encoded_hightlights.tokens
+        ):
             if token_idx == self.tokenizer.token_to_id("<unk>"):
-                token_oov_idx = oov_list.index(token)
-                if token_oov_idx == -1:
-                    labels.append(self.vocab_size + len(oov_list))
+                try:
+                    target_ids.append(self.vocab_size + oov_list.index(token))
+                except:
+                    target_ids.append(self.vocab_size + len(oov_list))
                     oov_list.append(token)
-                else:
-                    labels.append(self.vocab_size + token_oov_idx)
             else:
-                labels.append(token_idx)
+                target_ids.append(token_idx)
 
         return {
             "input_ids": torch.tensor(input_ids, dtype=torch.long),
-            "labels": torch.tensor(labels, dtype=torch.long),
+            "target_ids": torch.tensor(target_ids, dtype=torch.long),
             "oov_list": oov_list,
+            "input_text": sample["article"],
+            "target_text": sample["highlights"],
         }
 
 
@@ -104,17 +113,17 @@ class DynamicBatchSampler(Sampler):
         if self.shuffle:
             random.shuffle(indices)
 
-        batch, max_len = [], 0
+        batch, max_input_length = [], 0
         for idx in indices:
-            length = len(self.dataset[idx]["input_ids"])
-            new_max_len = max(max_len, length)
+            input_length = len(self.dataset[idx]["input_ids"])
+            new_max_input_length = max(max_input_length, input_length)
 
-            if batch and new_max_len * (len(batch) + 1) > self.max_tokens:
+            if batch and new_max_input_length * (len(batch) + 1) > self.max_tokens:
                 yield batch
-                batch, max_len = [], 0
+                batch, max_input_length = [], 0
 
             batch.append(idx)
-            max_len = max(max_len, length)
+            max_input_length = max(max_input_length, input_length)
         if batch:
             yield batch
 
@@ -123,17 +132,21 @@ class DynamicBatchSampler(Sampler):
 
 
 def collate_fn(batch):
-    input_ids = [s["input_ids"] for s in batch]
-    labels = [s["labels"] for s in batch]
+    batch_input_ids = [sample["input_ids"] for sample in batch]
+    batch_target_ids = [sample["target_ids"] for sample in batch]
 
-    input_ids = pad_sequence(input_ids, batch_first=True, padding_value=0)
-    labels = pad_sequence(labels, batch_first=True, padding_value=0)
+    batch_input_ids = pad_sequence(batch_input_ids, batch_first=True, padding_value=0)
+    batch_target_ids = pad_sequence(batch_target_ids, batch_first=True, padding_value=0)
 
-    input_lengths = (input_ids != 0).sum(dim=1)
+    input_lengths = (batch_input_ids != 0).sum(dim=1)
+    target_lengths = (batch_target_ids != 0).sum(dim=1)
 
     return {
-        "input_ids": input_ids,
-        "input_lengths": input_lengths,
-        "labels": labels,
-        "oov_lists": [s["oov_list"] for s in batch],
+        "input_ids": batch_input_ids,
+        "input_length": input_lengths,
+        "input_text": [sample["input_text"] for sample in batch],
+        "target_ids": batch_target_ids,
+        "target_length": target_lengths,
+        "target_text": [sample["target_text"] for sample in batch],
+        "oov_list": [sample["oov_list"] for sample in batch],
     }

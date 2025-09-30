@@ -10,7 +10,7 @@ from rouge_score import rouge_scorer
 from sentence_transformers import SentenceTransformer
 from torch.nn import functional as F
 
-nltk.download("wordnet")
+nltk.download("wordnet", quiet=True)
 
 
 def compute_metric(metric, candidate_text, reference_text, beta=8):

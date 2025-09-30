@@ -11,7 +11,9 @@ from metrics import compute_metric
 from neural_intra_attention_model import NeuralIntraAttentionModel
 from pointer_generator_network import PointerGeneratorNetwork
 from transformer import Transformer
-from utils import token_ids_to_text
+from utils import set_seed, token_ids_to_text
+
+set_seed()
 
 MODEL = "TRANSFORMER"
 CHECKPOINT_FOLDER = f"{MODEL.lower()}_checkpoints"
