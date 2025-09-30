@@ -1,31 +1,41 @@
 import os
 import re
 import shutil
+from collections import defaultdict
 
 import matplotlib.pyplot as plt
 import torch
+from tokenizers.implementations import ByteLevelBPETokenizer
 from torch.utils.data import DataLoader
 
 from dataset import CNNDailyMailDataset, DynamicBatchSampler, collate_fn
+from environment import detect_runtime_env, try_set_window_position
 from metrics import compute_metric
 from neural_intra_attention_model import NeuralIntraAttentionModel
 from pointer_generator_network import PointerGeneratorNetwork
+from tokenization import PointerGeneratorTokenizer
 from transformer import Transformer
 from utils import set_seed, token_ids_to_text
 
 set_seed()
 
-MODEL = "TRANSFORMER"
+MODEL = "POINTER_GENERATOR_NETWORK"
 CHECKPOINT_FOLDER = f"{MODEL.lower()}_checkpoints"
-NUM_EPOCHS = 1000
-MAX_TOKENS_EACH_BATCH = 10000
+NUM_EPOCHS = 2
+MAX_TOKENS_EACH_BATCH = 3000
+TRAIN_DATASET_LENGTH = 15
+VALIDATION_DATASET_LENGTH = 10
 CONTINUE_TRAINING = False
-DEVICE = "cpu"
+DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 LOSS_LOG_MODE = "console"
-LOSS_LOG_INTERVAL = 10
-METRICS = ["rouge1", "rouge2", "rougeL", "bleu", "meteor", "bertscore", "moverscore"]
+LOSS_LOG_INTERVAL = 3
+ENV = detect_runtime_env()
+METRICS = ["rouge1", "rouge2", "rougeL", "bleu4", "meteor", "bertscore", "moverscore"]
 MODEL_SAVE_INTERVAL = 10
-CHECKPOINT_INTERVAL = 10  # 10 lần save thì mới checkpoint
+CHECKPOINT_INTERVAL = 10
+
+if ENV in ("colab", "notebook"):
+    from IPython.display import clear_output, display
 
 
 def find_latest_checkpoint():
@@ -33,7 +43,7 @@ def find_latest_checkpoint():
         re.match(r"^checkpoint([1-9]\d*)\.pt$", f)
         for f in os.listdir(CHECKPOINT_FOLDER)
     ):
-        latest_checkpoint = max(
+        latest_checkpoint_idx = max(
             (
                 int(m.group(1))
                 for f in os.listdir(CHECKPOINT_FOLDER)
@@ -42,20 +52,24 @@ def find_latest_checkpoint():
         )
 
         return (
-            f"{CHECKPOINT_FOLDER}/checkpoint{latest_checkpoint}.pt",
-            latest_checkpoint,
+            f"{CHECKPOINT_FOLDER}/checkpoint{latest_checkpoint_idx}.pt",
+            latest_checkpoint_idx,
         )
 
-    return None, None
+    return None, -1
 
 
 def clear_checkpoint_folder():
-    [
-        shutil.rmtree(p) if os.path.isdir(p) else os.remove(p)
-        for p in (
-            os.path.join(CHECKPOINT_FOLDER, f) for f in os.listdir(CHECKPOINT_FOLDER)
-        )
-    ]
+    if os.path.exists(CHECKPOINT_FOLDER):
+        [
+            shutil.rmtree(p) if os.path.isdir(p) else os.remove(p)
+            for p in (
+                os.path.join(CHECKPOINT_FOLDER, f)
+                for f in os.listdir(CHECKPOINT_FOLDER)
+            )
+        ]
+    else:
+        os.makedirs(CHECKPOINT_FOLDER)
 
 
 if __name__ == "__main__":
@@ -70,24 +84,43 @@ if __name__ == "__main__":
         else:
             fig, (epoch_ax, metric_ax) = plt.subplots(1, 2, figsize=(10, 6))
 
+    if MODEL == "TRANSFORMER":
+        tokenizer = ByteLevelBPETokenizer("vocab.json", "merges.txt")
+    else:
+        tokenizer = PointerGeneratorTokenizer("word_level_vocab.json")
+
     ds = {
-        "train": CNNDailyMailDataset(),
-        "validation": CNNDailyMailDataset(split="validation"),
+        "train": CNNDailyMailDataset(
+            split="train",
+            tokenizer=tokenizer,
+            dataset_length=TRAIN_DATASET_LENGTH,
+        ),
+        "validation": CNNDailyMailDataset(
+            split="validation",
+            tokenizer=tokenizer,
+            dataset_length=VALIDATION_DATASET_LENGTH,
+        ),
     }
     loader = {
         "train": DataLoader(
             ds["train"],
             collate_fn=collate_fn,
             batch_sampler=DynamicBatchSampler(
-                ds["train"], max_tokens=MAX_TOKENS_EACH_BATCH, shuffle=True
+                ds["train"],
+                max_tokens=MAX_TOKENS_EACH_BATCH,
+                shuffle=True,
             ),
+            pin_memory=True if DEVICE == "cuda" else False,
         ),
         "validation": DataLoader(
             ds["validation"],
             collate_fn=collate_fn,
             batch_sampler=DynamicBatchSampler(
-                ds["validation"], max_tokens=MAX_TOKENS_EACH_BATCH, shuffle=True
+                ds["validation"],
+                max_tokens=MAX_TOKENS_EACH_BATCH,
+                shuffle=False,
             ),
+            pin_memory=True if DEVICE == "cuda" else False,
         ),
     }
 
@@ -95,14 +128,14 @@ if __name__ == "__main__":
 
     if CONTINUE_TRAINING and checkpoint_file is not None:
         model = torch.load(checkpoint_file)
+        print("Model loaded successfully!")
     else:
         clear_checkpoint_folder()
 
         match MODEL:
             case "POINTER_GENERATOR_NETWORK":
                 model = PointerGeneratorNetwork(
-                    vocab_size=ds["train"].vocab_size,
-                    tokenizer=ds["train"].tokenizer,
+                    tokenizer=tokenizer,
                     embedding_dim=128,
                     encoder_hidden_dim=160,
                     decoder_hidden_dim=196,
@@ -110,86 +143,86 @@ if __name__ == "__main__":
                     bottle_neck_dim=56,
                     cov_loss_factor=0.75,
                     learning_rate=1e-3,
+                    device=DEVICE,
                 )
             case "NEURAL_INTRA_ATTENTION_MODEL":
                 model = NeuralIntraAttentionModel(
-                    vocab_size=ds["train"].vocab_size,
-                    tokenizer=ds["train"].tokenizer,
+                    tokenizer=tokenizer,
                     embedding_dim=128,
                     hidden_dim=160,
-                    unknown_token=ds["train"].tokenizer.token_to_id("<unk>"),
-                    start_token=ds["train"].tokenizer.token_to_id("<s>"),
-                    end_token=ds["train"].tokenizer.token_to_id("</s>"),
+                    rl_loss_factor=0.75,
+                    learning_rate=1e-4,
+                    device=DEVICE,
                 )
             case "TRANSFORMER":
                 model = Transformer(
-                    vocab_size=ds["train"].vocab_size,
-                    tokenizer=ds["train"].tokenizer,
+                    tokenizer=tokenizer,
                     d_model=128,
                     nhead=8,
                     num_layers=2,
                     learning_rate=1e-3,
+                    device=DEVICE,
                 )
 
-    epoch_loss_history = dict()
-    metric_history = dict()
-    for metric in METRICS:
-        metric_history[metric] = []
+    epoch_loss_history = defaultdict(lambda: defaultdict(list))
+    metric_history = defaultdict(list)
     save_count = 0
     for epoch in range(NUM_EPOCHS):
-        metrics = dict()
-        for metric in METRICS:
-            metrics[metric] = []
+        metrics = defaultdict(list)
         for split in ["train", "validation"]:
-            batch_loss_history = None
-            caller = (
+            batch_loss_history = defaultdict(list)
+            batch_step = (
                 model.train_one_batch if split == "train" else model.validate_one_batch
             )
+            epoch_num_tokens = 0
             for batch_idx, batch in enumerate(loader[split]):
+                batch_num_tokens = batch["target_length"].sum().item()
+                epoch_num_tokens += batch_num_tokens
                 match MODEL:
                     case "POINTER_GENERATOR_NETWORK":
-                        losses = caller(
-                            batch["input_ids"], batch["labels"], batch["input_lengths"]
+                        losses = batch_step(
+                            batch["input_ids"],
+                            batch["target_ids"],
+                            batch["oov_list"],
+                            batch["input_length"],
                         )
                     case "NEURAL_INTRA_ATTENTION_MODEL":
-                        losses = caller(
+                        losses = batch_step(
                             batch["input_ids"],
-                            batch["labels"],
-                            batch["oov_lists"],
-                            batch["input_lengths"],
+                            batch["target_ids"],
+                            batch["oov_list"],
+                            batch["input_length"],
+                            max_reinforce_length=100,
+                            target_texts=batch["target_text"],
                         )
                     case "TRANSFORMER":
-                        losses = caller(
-                            batch["input_ids"], batch["labels"], batch["input_lengths"]
+                        losses = batch_step(
+                            batch["input_ids"],
+                            batch["target_ids"],
                         )
 
-                if batch_loss_history is None:
-                    batch_loss_history = {k: [] for k in losses.keys()}
-
-                for k, v in losses.items():
-                    batch_loss_history[k].append(v.item())
+                for loss_type, loss_value in losses.items():
+                    batch_loss_history[loss_type].append(loss_value)
 
                 if split == "validation":
-                    for sample_idx in len(batch["input_ids"]):
-                        output_ids = model.infer(batch["input_ids"][sample_idx])
-                        candidate_summary = token_ids_to_text(
-                            ds["validation"].tokenizer,
+                    for input_ids, oov_list, target_text in zip(
+                        batch["input_ids"], batch["oov_list"], batch["target_text"]
+                    ):
+                        output_ids = model.infer(
+                            input_ids,
+                            max_output_length=5,
+                            beam_width=2,
+                        )["output_ids"]
+                        output_text = token_ids_to_text(
+                            tokenizer,
                             output_ids,
-                            batch["oov_lists"][sample_idx],
-                            ds["validation"].vocab_size,
-                        )
-                        reference_summary = token_ids_to_text(
-                            ds["validation"].tokenizer,
-                            batch["labels"][sample_idx],
-                            batch["oov_lists"][sample_idx],
-                            ds["validation"].vocab_size,
+                            oov_list,
+                            tokenizer.get_vocab_size(),
                         )
 
                         for metric in METRICS:
                             metrics[metric].append(
-                                compute_metric(
-                                    metric, candidate_summary, reference_summary
-                                )
+                                compute_metric(metric, output_text, target_text)
                             )
 
                 if (
@@ -197,15 +230,13 @@ if __name__ == "__main__":
                     and LOSS_LOG_INTERVAL is not None
                     and batch_idx % LOSS_LOG_INTERVAL == 0
                 ):
+                    average_loss_per_token = losses["total_loss"] / batch_num_tokens
+                    log = f"Epoch {epoch} / Batch {batch_idx} : Average Loss Per Token is {average_loss_per_token}"
                     match LOSS_LOG_MODE:
                         case "console":
-                            print(
-                                f"Epoch {epoch} / Batch {batch_idx} : Loss {losses["total_loss"]}"
-                            )
+                            print(log)
                         case "file":
-                            loss_log_file.write(
-                                f"Epoch {epoch} / Batch {batch_idx} : Loss {losses["total_loss"]}\n"
-                            )
+                            loss_log_file.write(log + "\n")
                         case "graph":
                             for k, v_list in batch_loss_history.items():
                                 batch_ax.plot(v_list, label=k)
@@ -220,36 +251,43 @@ if __name__ == "__main__":
                 if (
                     split == "train"
                     and MODEL_SAVE_INTERVAL is not None
-                    and batch_idx % LOSS_LOG_INTERVAL == 0
+                    and batch_idx % MODEL_SAVE_INTERVAL == 0
                 ):
                     torch.save(
                         model, f"{CHECKPOINT_FOLDER}/checkpoint{checkpoint_idx + 1}.pt"
                     )
                     save_count += 1
+                    print(
+                        f"Model saved successfully! (Check point {checkpoint_idx + 1})"
+                    )
 
-                if save_count % MODEL_SAVE_INTERVAL == 0:
+                if (
+                    CHECKPOINT_INTERVAL is not None
+                    and save_count % CHECKPOINT_INTERVAL == 0
+                ):
                     checkpoint_idx += 1
 
-            if epoch_loss_history[split] is None:
-                epoch_loss_history[split] = {k: [] for k in batch_loss_history.keys()}
+            for loss_type, loss_values in batch_loss_history.items():
+                epoch_loss_history[split][loss_type].append(
+                    sum(loss_values) / epoch_num_tokens
+                )
 
-            for k, v in batch_loss_history.items():
-                epoch_loss_history[split][k].append(sum(v) / len(v))
+            log = f"Epoch {epoch} / {split.capitalize()} : Average Loss Per Token is {epoch_loss_history[split]["total_loss"][-1]}"
 
             match LOSS_LOG_MODE:
                 case "console":
-                    print(f"Epoch {epoch} / {split} : Loss {losses["total_loss"]}")
+                    print(log)
                 case "file":
-                    loss_log_file.write(
-                        f"Epoch {epoch} / {split} : Loss {losses["total_loss"]}\n"
-                    )
+                    loss_log_file.write(log + "\n")
 
-        print(f"Validation metrics for epoch {epoch}:")
-        loss_log_file.write(f"Validation metrics for epoch {epoch}:\n")
-        for metric, values in metrics:
+        log = f"Validation metrics at epoch {epoch} :"
+        print(log)
+        loss_log_file.write(log + "\n")
+        for metric, values in metrics.items():
             metrics[metric] = sum(values) / len(values)
-            print(f"{metric}: {metrics[metric]}")
-            loss_log_file.write(f"{metric}: {metrics[metric]}\n")
+            log = f"{metric.toupper()} : {metrics[metric]}"
+            print(log)
+            loss_log_file.write(log + "\n")
             metric_history[metric].append(metrics[metric])
 
         if LOSS_LOG_MODE == "graph":

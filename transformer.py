@@ -388,7 +388,7 @@ class Transformer(nn.Module):
 
         return (
             {
-                "summary": beam_search_final_state["sequence"][1:],
+                "output_ids": beam_search_final_state["sequence"][1:],
             }
             | (
                 {

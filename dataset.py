@@ -9,6 +9,8 @@ from torch.utils.data import Dataset, Sampler
 
 
 class CNNDailyMailDataset(Dataset):
+    full_ds = None
+
     def __init__(
         self,
         split="train",
@@ -23,7 +25,12 @@ class CNNDailyMailDataset(Dataset):
         self.vocab_size = self.tokenizer.get_vocab_size()
 
         if split in ["train", "cross validation", "test", "validation"]:
-            full_ds = load_dataset("abisee/cnn_dailymail", "3.0.0")
+            if CNNDailyMailDataset.full_ds is None:
+                CNNDailyMailDataset.full_ds = load_dataset(
+                    "abisee/cnn_dailymail", "3.0.0"
+                )
+
+        full_ds = CNNDailyMailDataset.full_ds
 
         match split:
             case "train" | "cross validation":

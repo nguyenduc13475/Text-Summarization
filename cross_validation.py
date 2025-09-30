@@ -9,7 +9,7 @@ from tokenizers.implementations import ByteLevelBPETokenizer
 from torch.utils.data import DataLoader
 
 from dataset import CNNDailyMailDataset, DynamicBatchSampler, collate_fn
-from display import detect_runtime_env, try_set_window_position
+from environment import detect_runtime_env, try_set_window_position
 from neural_intra_attention_model import NeuralIntraAttentionModel
 from pointer_generator_network import PointerGeneratorNetwork
 from tokenization import PointerGeneratorTokenizer
@@ -125,7 +125,7 @@ if __name__ == "__main__":
                 batch_sampler=DynamicBatchSampler(
                     ds, max_tokens=MAX_TOKENS_EACH_BATCH, shuffle=True
                 ),
-                pin_memory=True,
+                pin_memory=True if DEVICE == "cuda" else False,
             )
 
             batch_step = (
