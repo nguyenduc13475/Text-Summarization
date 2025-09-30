@@ -1,5 +1,4 @@
 import re
-import warnings
 
 import bert_score
 import nltk
@@ -10,6 +9,8 @@ from nltk.translate.meteor_score import meteor_score
 from rouge_score import rouge_scorer
 from sentence_transformers import SentenceTransformer
 from torch.nn import functional as F
+
+from utils import suppress_print
 
 nltk.download("wordnet", quiet=True)
 
@@ -60,8 +61,7 @@ def compute_metric(metric, candidate_text, reference_text, beta=8):
 
     # BERTScore
     if metric == "bertscore":
-        with warnings.catch_warnings():
-            warnings.filterwarnings("ignore", message="Some weights.*pooler*")
+        with suppress_print():
             _, _, F1 = bert_score.score(
                 [candidate_text], [reference_text], lang="en", verbose=False
             )
