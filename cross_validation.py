@@ -18,7 +18,7 @@ from utils import name_to_latex, set_seed
 
 logging.getLogger("datasets").setLevel(logging.ERROR)
 
-MODEL = "TRANSFORMER"
+MODEL = "POINTER_GENERATOR_NETWORK"
 NUM_EPOCHS = 2
 MAX_TOKENS_EACH_BATCH = 3000
 DATASET_LENGTH = 15
