@@ -280,13 +280,17 @@ if __name__ == "__main__":
                 case "file":
                     loss_log_file.write(log + "\n")
 
-        print_log_file("=================================================")
-        print_log_file(f"Validation metrics at epoch {epoch} :")
+        print_log_file(
+            "=================================================", loss_log_file
+        )
+        print_log_file(f"Validation metrics at epoch {epoch} :", loss_log_file)
         for metric, values in metrics.items():
             metrics[metric] = sum(values) / len(values)
-            print_log_file(f"{metric.upper()} : {metrics[metric]}")
+            print_log_file(f"{metric.upper()} : {metrics[metric]}", loss_log_file)
             metric_history[metric].append(metrics[metric])
-        print_log_file("=================================================")
+        print_log_file(
+            "=================================================", loss_log_file
+        )
 
         if LOSS_LOG_MODE == "graph":
             # chồng thêm validation loss lên plot của train loss

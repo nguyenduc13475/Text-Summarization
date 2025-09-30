@@ -14,7 +14,7 @@ from neural_intra_attention_model import NeuralIntraAttentionModel
 from pointer_generator_network import PointerGeneratorNetwork
 from tokenization import PointerGeneratorTokenizer
 from transformer import Transformer
-from utils import name_to_latex, set_seed
+from utils import name_to_latex, print_log_file, set_seed
 
 logging.getLogger("datasets").setLevel(logging.ERROR)
 
@@ -220,13 +220,12 @@ if __name__ == "__main__":
             else:
                 fold_loss_history.append(epoch_loss_history)
 
-        log = f"Fold {fold} Loss is {average_loss_per_token}"
-        print(log)
-        loss_log_file.write(log + "\n")
+        print_log_file(f"Fold {fold} Loss is {average_loss_per_token}", loss_log_file)
 
-    log = f"Average Fold Loss is {sum(cross_validation_losses) / NUM_FOLDS}"
-    print(log)
-    loss_log_file.write(log)
+    print_log_file(
+        f"Average Fold Loss is {sum(cross_validation_losses) / NUM_FOLDS}",
+        loss_log_file,
+    )
     loss_log_file.close()
     if LOSS_LOG_MODE == "graph" and ENV == "gui":
         plt.show()
