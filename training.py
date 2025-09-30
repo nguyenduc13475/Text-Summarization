@@ -285,7 +285,7 @@ if __name__ == "__main__":
         loss_log_file.write(log + "\n")
         for metric, values in metrics.items():
             metrics[metric] = sum(values) / len(values)
-            log = f"{metric.toupper()} : {metrics[metric]}"
+            log = f"{metric.upper()} : {metrics[metric]}"
             print(log)
             loss_log_file.write(log + "\n")
             metric_history[metric].append(metrics[metric])
