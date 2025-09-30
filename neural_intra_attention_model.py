@@ -469,7 +469,12 @@ class NeuralIntraAttentionModel(nn.Module):
             new_state = dict()
             current_embedding = self.embedding_layer(
                 torch.tensor(
-                    min(state["sequence"][-1], self.vocab_size - 1), device=self.device
+                    (
+                        state["sequence"][-1]
+                        if state["sequence"][-1] < self.vocab_size
+                        else self.unknown_token
+                    ),
+                    device=self.device,
                 )
             )
             new_state["decoder_hidden_state"], new_state["decoder_cell_state"] = (
