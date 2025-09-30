@@ -460,7 +460,9 @@ class NeuralIntraAttentionModel(nn.Module):
             _,
         ) = self.encoder(embeddings)
 
-        out_proj = F.tanh(self.embedding_layer.weight @ self.vocab_proj)
+        out_proj = F.tanh(
+            self.embedding_layer.weight[self.end_token :] @ self.vocab_proj
+        )
 
         def predictor(state):
             nonlocal out_proj, return_attention
@@ -525,7 +527,9 @@ class NeuralIntraAttentionModel(nn.Module):
             )
 
             p_gen = F.sigmoid(self.concat_state_to_switch(concat_state)).squeeze(0)
-            generator_probs = F.pad(p_gen * vocab_distribution, (0, num_oovs))
+            generator_probs = F.pad(
+                p_gen * vocab_distribution, (self.end_token, num_oovs)
+            )
             pointer_probs = (1 - p_gen) * encoder_attention_distribution
             final_distribution = generator_probs.scatter_add(
                 0, input_ids, pointer_probs
