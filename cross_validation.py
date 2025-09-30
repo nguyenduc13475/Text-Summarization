@@ -17,7 +17,7 @@ from utils import name_to_latex, set_seed
 
 logging.getLogger("datasets").setLevel(logging.ERROR)
 
-MODEL = "POINTER_GENERATOR_NETWORK"
+MODEL = "TRANSFORMER"
 NUM_EPOCHS = 2
 MAX_TOKENS_EACH_BATCH = 3000
 DATASET_LENGTH = 15
@@ -226,5 +226,5 @@ if __name__ == "__main__":
     print(log)
     loss_log_file.write(log)
     loss_log_file.close()
-    if LOSS_LOG_MODE == "graph":
+    if LOSS_LOG_MODE == "graph" and ENV == "gui":
         plt.show()
