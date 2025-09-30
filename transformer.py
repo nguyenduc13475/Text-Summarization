@@ -342,9 +342,12 @@ class Transformer(nn.Module):
                 [state["current_output_embeddings"], next_token_embedding.unsqueeze(0)],
                 dim=0,
             )
-            vocab_distribution = F.softmax(
-                self.out_proj(next_token_embedding),
-                dim=0,
+            vocab_distribution = F.pad(
+                F.softmax(
+                    self.out_proj(next_token_embedding),
+                    dim=0,
+                ),
+                (self.end_token, 0),
             )
 
             if return_attention:

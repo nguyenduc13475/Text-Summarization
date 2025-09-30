@@ -37,7 +37,7 @@ def beam_search(
 
                 candidates.append(
                     (
-                        score + log_prob,
+                        score + log_prob.item(),
                         {**new_state, "sequence": new_sequence},
                     )
                 )

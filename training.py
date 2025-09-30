@@ -17,6 +17,7 @@ from tokenization import PointerGeneratorTokenizer
 from transformer import Transformer
 from utils import (
     load_checkpoint,
+    name_to_latex,
     print_log_file,
     save_checkpoint,
     set_seed,
@@ -33,7 +34,7 @@ TRAIN_DATASET_LENGTH = 15
 VALIDATION_DATASET_LENGTH = 10
 CONTINUE_TRAINING = False
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
-LOSS_LOG_MODE = "console"
+LOSS_LOG_MODE = "graph"
 LOSS_LOG_INTERVAL = 3
 ENV = detect_runtime_env()
 METRICS = ["rouge1", "rouge2"]
@@ -82,13 +83,41 @@ if __name__ == "__main__":
     loss_log_file = open("loss_log.txt", "w")
 
     if LOSS_LOG_MODE == "graph":
-        plt.ion()
         if LOSS_LOG_INTERVAL is not None:
-            fig, (batch_ax, epoch_ax, metric_ax, _) = plt.subplots(
-                2, 2, figsize=(10, 6)
-            )
+            figure = plt.figure(figsize=(10, 10))
+            batch_ax = figure.add_subplot(2, 2, 1)
+            epoch_ax = figure.add_subplot(2, 2, 2)
+            metric_ax = figure.add_subplot(2, 2, 3)
+            batch_ax.set_xlabel("Batch/Epoch Progress")
+            batch_ax.set_ylabel("Average Loss Per Token")
+            batch_ax.set_title(f"Loss Curves")
+            batch_ax.grid(True)
+            batch_line_2ds = defaultdict(lambda: None)
         else:
-            fig, (epoch_ax, metric_ax) = plt.subplots(1, 2, figsize=(10, 6))
+            figure = plt.figure(figsize=(5, 10))
+            epoch_ax, metric_ax = figure.subplots(1, 2).flatten()
+
+        try_set_window_position(0, 0)
+
+        epoch_ax.set_xlabel("Epoch")
+        epoch_ax.set_ylabel("Average Loss Per Token")
+        epoch_ax.set_title(f"Loss Curves")
+        epoch_ax.grid(True)
+
+        metric_ax.set_xlabel("Epoch")
+        metric_ax.set_ylabel("Average Metric Per Sample")
+        metric_ax.set_title(f"Metric Curves")
+        metric_ax.grid(True)
+
+        figure.tight_layout(pad=2.0)
+        match ENV:
+            case "colab" | "notebook":
+                display(figure)
+            case "gui":
+                plt.pause(0.01)
+
+        epoch_line_2ds = defaultdict(lambda: defaultdict(lambda: None))
+        metric_line_2ds = defaultdict(lambda: None)
 
     if MODEL == "TRANSFORMER":
         tokenizer = ByteLevelBPETokenizer("vocab.json", "merges.txt")
@@ -172,16 +201,17 @@ if __name__ == "__main__":
         checkpoint_idx = -1
 
     epoch_loss_history = defaultdict(lambda: defaultdict(list))
+    batch_loss_history = defaultdict(list)
     metric_history = defaultdict(list)
     save_count = 0
     for epoch in range(NUM_EPOCHS):
         metrics = defaultdict(list)
         for split in ["train", "validation"]:
-            batch_loss_history = defaultdict(list)
             batch_step = (
                 model.train_one_batch if split == "train" else model.validate_one_batch
             )
             epoch_num_tokens = 0
+            raw_batch_loss_history = defaultdict(list)
             for batch_idx, batch in enumerate(loader[split]):
                 batch_num_tokens = batch["target_length"].sum().item()
                 epoch_num_tokens += batch_num_tokens
@@ -209,7 +239,11 @@ if __name__ == "__main__":
                         )
 
                 for loss_type, loss_value in losses.items():
-                    batch_loss_history[loss_type].append(loss_value)
+                    if split == "train":
+                        batch_loss_history[loss_type].append(
+                            loss_value / batch_num_tokens
+                        )
+                    raw_batch_loss_history[loss_type].append(loss_value)
 
                 if split == "validation":
                     for input_ids, oov_list, target_text in zip(
@@ -245,15 +279,29 @@ if __name__ == "__main__":
                         case "file":
                             loss_log_file.write(log + "\n")
                         case "graph":
-                            for k, v_list in batch_loss_history.items():
-                                batch_ax.plot(v_list, label=k)
-                            batch_ax.set_xlabel("Batch (Epoch progress)")
-                            batch_ax.set_ylabel("Loss")
-                            batch_ax.set_title(f"Loss Curves")
-                            batch_ax.legend()
-                            batch_ax.grid(True)
-                            plt.pause(0.01)
-                            batch_ax.cla()
+                            for (
+                                loss_type,
+                                loss_values,
+                            ) in batch_loss_history.items():
+                                if batch_line_2ds[loss_type] is None:
+                                    batch_line_2ds[loss_type] = batch_ax.plot(
+                                        loss_values,
+                                        label=name_to_latex[loss_type],
+                                    )[0]
+                                    batch_ax.legend()
+                                else:
+                                    batch_line_2ds[loss_type].set_xdata(
+                                        range(len(loss_values))
+                                    )
+                                    batch_line_2ds[loss_type].set_ydata(loss_values)
+
+                            batch_ax.relim()
+                            batch_ax.autoscale()
+                            figure.canvas.draw()
+                            figure.canvas.flush_events()
+                            if ENV in ("colab", "notebook"):
+                                clear_output(wait=True)
+                                display(figure)
 
                 if (
                     split == "train"
@@ -274,7 +322,7 @@ if __name__ == "__main__":
                     ):
                         checkpoint_idx += 1
 
-            for loss_type, loss_values in batch_loss_history.items():
+            for loss_type, loss_values in raw_batch_loss_history.items():
                 epoch_loss_history[split][loss_type].append(
                     sum(loss_values) / epoch_num_tokens
                 )
@@ -286,6 +334,30 @@ if __name__ == "__main__":
                     print(log)
                 case "file":
                     loss_log_file.write(log + "\n")
+                case "graph":
+                    for (
+                        loss_type,
+                        loss_values,
+                    ) in epoch_loss_history[split].items():
+                        if epoch_line_2ds[split][loss_type] is None:
+                            epoch_line_2ds[split][loss_type] = epoch_ax.plot(
+                                loss_values,
+                                label=name_to_latex[loss_type] + f" ({split})",
+                            )[0]
+                            epoch_ax.legend()
+                        else:
+                            epoch_line_2ds[split][loss_type].set_xdata(
+                                range(len(loss_values))
+                            )
+                            epoch_line_2ds[split][loss_type].set_ydata(loss_values)
+
+                    epoch_ax.relim()
+                    epoch_ax.autoscale()
+                    figure.canvas.draw()
+                    figure.canvas.flush_events()
+                    if ENV in ("colab", "notebook"):
+                        clear_output(wait=True)
+                        display(figure)
 
         print_log_file(
             "=================================================", loss_log_file
@@ -300,24 +372,29 @@ if __name__ == "__main__":
         )
 
         if LOSS_LOG_MODE == "graph":
-            # chồng thêm validation loss lên plot của train loss
-            for k, v_list in epoch_loss_history["validation"].items():
-                epoch_ax.plot(v_list, label=k)
-                epoch_ax.set_xlabel("Batch (Epoch progress)")
-                epoch_ax.set_ylabel("Loss")
-                epoch_ax.set_title("Loss Curves")
-                epoch_ax.legend()
-                epoch_ax.grid(True)
-                plt.pause(0.01)
-                epoch_ax.cla()
-
             # tạo 1 graph cho tất cả metrics
-            for metric, v_list in metric_history.items():
-                metric_ax.plot(v_list, label=k)
-                metric_ax.set_xlabel("Batch (Epoch progress)")
-                metric_ax.set_ylabel("Metric")
-                metric_ax.set_title("Metric Curves")
-                metric_ax.legend()
-                metric_ax.grid(True)
-                plt.pause(0.01)
-                metric_ax.cla()
+            for metric, values in metric_history.items():
+                for (
+                    metric,
+                    values,
+                ) in metric_history.items():
+                    if metric_line_2ds[metric] is None:
+                        metric_line_2ds[metric] = metric_ax.plot(
+                            values, label=metric.upper()
+                        )[0]
+                        metric_ax.legend()
+                    else:
+                        metric_line_2ds[metric].set_xdata(range(len(values)))
+                        metric_line_2ds[metric].set_ydata(values)
+
+                metric_ax.relim()
+                metric_ax.autoscale()
+                figure.canvas.draw()
+                figure.canvas.flush_events()
+                if ENV in ("colab", "notebook"):
+                    clear_output(wait=True)
+                    display(figure)
+
+    loss_log_file.close()
+    if LOSS_LOG_MODE == "graph" and ENV == "gui":
+        plt.show()
