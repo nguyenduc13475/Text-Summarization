@@ -1,5 +1,4 @@
 import re
-import warnings
 
 import bert_score
 import nltk
@@ -10,6 +9,9 @@ from nltk.translate.meteor_score import meteor_score
 from rouge_score import rouge_scorer
 from sentence_transformers import SentenceTransformer
 from torch.nn import functional as F
+from transformers import logging
+
+logging.set_verbosity_error()
 
 nltk.download("wordnet", quiet=True)
 
@@ -60,9 +62,6 @@ def compute_metric(metric, candidate_text, reference_text, beta=8):
 
     # BERTScore
     if metric == "bertscore":
-        warnings.filterwarnings(
-            "ignore", message="Some weights of RobertaModel were not initialized*"
-        )
         _, _, F1 = bert_score.score(
             [candidate_text], [reference_text], lang="en", verbose=False
         )
