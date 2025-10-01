@@ -161,7 +161,7 @@ if __name__ == "__main__":
             print(f"{metric.upper()}: {metrics[MODEL][metric]}")
         print("=================================================")
 
-    x = np.arange(len(METRICS))
+    x = np.arange(len(METRICS)) * 1.5
     width = 0.25
     figure, ax = plt.subplots(figsize=(12, 6))
     for i, MODEL in enumerate(MODELS):
