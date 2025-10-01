@@ -210,7 +210,7 @@ class Transformer(nn.Module):
         return torch.where(
             ids >= self.vocab_size,
             torch.tensor(self.unknown_token, device=self.device),
-            ids.to(self.device),
+            ids.to,
         )
 
     def _safe_embed(self, ids):
@@ -315,6 +315,7 @@ class Transformer(nn.Module):
     ):
         self.eval()
         with torch.no_grad():
+            batch_input_ids = batch_input_ids.to(self.device)
             beam_width = min(beam_width, self.vocab_size)
 
             if batch_input_ids.dim() == 1:
