@@ -7,6 +7,8 @@ from tokenizers.implementations import ByteLevelBPETokenizer
 from torch.nn.utils.rnn import pad_sequence
 from torch.utils.data import Dataset, Sampler
 
+from utils import text_to_token_ids
+
 
 class CNNDailyMailDataset(Dataset):
     full_ds = None
@@ -69,49 +71,24 @@ class CNNDailyMailDataset(Dataset):
 
     def __getitem__(self, idx):
         sample = self.ds[idx]
-        if self.tokenizer is None:
-            return {
-                "input_text": sample["article"],
-                "target_text": sample["highlights"],
-            }
         article, hightlights = sample["article"], sample["highlights"]
 
-        encoded_article = self.tokenizer.encode(article)
-        encoded_hightlights = self.tokenizer.encode(hightlights)
+        if self.tokenizer is None:
+            return {
+                "input_text": article,
+                "target_text": hightlights,
+            }
 
-        input_ids = []
-        target_ids = []
         oov_list = []
-
-        for token_idx, token in zip(encoded_article.ids, encoded_article.tokens):
-            if token_idx == self.tokenizer.token_to_id("<unk>"):
-                try:
-                    input_ids.append(self.vocab_size + oov_list.index(token))
-                except:
-                    input_ids.append(self.vocab_size + len(oov_list))
-                    oov_list.append(token)
-
-            else:
-                input_ids.append(token_idx)
-
-        for token_idx, token in zip(
-            encoded_hightlights.ids, encoded_hightlights.tokens
-        ):
-            if token_idx == self.tokenizer.token_to_id("<unk>"):
-                try:
-                    target_ids.append(self.vocab_size + oov_list.index(token))
-                except:
-                    target_ids.append(self.vocab_size + len(oov_list))
-                    oov_list.append(token)
-            else:
-                target_ids.append(token_idx)
+        input_ids = text_to_token_ids(self.tokenizer, article, oov_list)
+        target_ids = text_to_token_ids(self.tokenizer, hightlights, oov_list)
 
         return {
             "input_ids": torch.tensor(input_ids, dtype=torch.long),
             "target_ids": torch.tensor(target_ids, dtype=torch.long),
             "oov_list": oov_list,
-            "input_text": sample["article"],
-            "target_text": sample["highlights"],
+            "input_text": article,
+            "target_text": hightlights,
         }
 
 

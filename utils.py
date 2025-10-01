@@ -58,19 +58,23 @@ def token_ids_to_text(tokenizer, ids, oov_list, return_output="text"):
         return sentence, tokens
 
 
-def pad_and_stack(tensor_list, pad_value=0.0):
-    max_len = max(t.size(0) for t in tensor_list)
-    padded = []
-    for t in tensor_list:
-        pad_size = max_len - t.size(0)
-        if pad_size > 0:
-            padded_t = torch.cat(
-                [t, torch.full((pad_size,), pad_value, device=t.device)]
-            )
+def text_to_token_ids(tokenizer, input_text, oov_list=[]):
+    vocab_size = tokenizer.get_vocab_size()
+    encoded_text = tokenizer.encode(input_text)
+
+    ids = []
+
+    for token_idx, token in zip(encoded_text.ids, encoded_text.tokens):
+        if token_idx == tokenizer.token_to_id("<unk>"):
+            try:
+                ids.append(vocab_size + oov_list.index(token))
+            except:
+                ids.append(vocab_size + len(oov_list))
+                oov_list.append(token)
+
         else:
-            padded_t = t
-        padded.append(padded_t)
-    return torch.stack(padded, dim=0)
+            ids.append(token_idx)
+    return ids
 
 
 def set_seed(seed: int = 42):

@@ -2,6 +2,7 @@ import os
 import sys
 
 import matplotlib.pyplot as plt
+from IPython.display import display
 
 
 def detect_runtime_env():
@@ -38,3 +39,11 @@ def try_set_window_position(x=50, y=50):
             pass
     except Exception:
         pass
+
+
+def adaptive_display(figure, ENV):
+    match ENV:
+        case "colab" | "notebook":
+            display(figure)
+        case "gui":
+            plt.pause(0.01)

@@ -9,7 +9,7 @@ from tokenizers.implementations import ByteLevelBPETokenizer
 from torch.utils.data import DataLoader
 
 from dataset import CNNDailyMailDataset, DynamicBatchSampler, collate_fn
-from environment import detect_runtime_env, try_set_window_position
+from environment import adaptive_display, detect_runtime_env, try_set_window_position
 from metrics import compute_metric
 from neural_intra_attention_model import NeuralIntraAttentionModel
 from pointer_generator_network import PointerGeneratorNetwork
@@ -175,8 +175,4 @@ if __name__ == "__main__":
     ax.legend()
     ax.grid(axis="y", linestyle="--", alpha=0.6)
     try_set_window_position(0, 0)
-    match ENV:
-        case "colab" | "notebook":
-            display(figure)
-        case "gui":
-            plt.show()
+    adaptive_display(figure, ENV)

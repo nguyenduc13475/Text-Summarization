@@ -435,6 +435,10 @@ class NeuralIntraAttentionModel(nn.Module):
     ):
         self.eval()
         with torch.no_grad():
+            if not isinstance(batch_input_ids, torch.Tensor):
+                batch_input_ids = torch.tensor(
+                    batch_input_ids, device=self.device, dtype=torch.long
+                )
             batch_input_ids = batch_input_ids.to(self.device)
             beam_width = min(beam_width, self.vocab_size)
             if batch_input_ids.dim() == 1:
@@ -536,7 +540,7 @@ class NeuralIntraAttentionModel(nn.Module):
             previous_decoder_hidden_states = decoder_hidden_states.unsqueeze(1)
 
             if return_attention:
-                encoder_attention_distributions_list = [
+                cross_attention_distributions_list = [
                     encoder_attention_distributions.repeat_interleave(beam_width, dim=0)
                 ]
                 decoder_attention_distributions_list = []
@@ -628,12 +632,12 @@ class NeuralIntraAttentionModel(nn.Module):
                 batch_input_ids = batch_input_ids[chosen_beam_indices]
 
                 if return_attention:
-                    encoder_attention_distributions_list.append(
+                    cross_attention_distributions_list.append(
                         encoder_attention_distributions
                     )
-                    for i in range(len(encoder_attention_distributions_list)):
-                        encoder_attention_distributions_list[i] = (
-                            encoder_attention_distributions_list[i][chosen_beam_indices]
+                    for i in range(len(cross_attention_distributions_list)):
+                        cross_attention_distributions_list[i] = (
+                            cross_attention_distributions_list[i][chosen_beam_indices]
                         )
 
                     decoder_attention_distributions_list.append(
@@ -653,10 +657,10 @@ class NeuralIntraAttentionModel(nn.Module):
             if return_embedding:
                 output["input_embeddings"] = batch_embeddings
             if return_attention:
-                output["encoder_attention_distributions"] = torch.stack(
+                output["cross_attention_distributions"] = torch.stack(
                     [
                         attention_distributions[chosen_beam_indices]
-                        for attention_distributions in encoder_attention_distributions_list
+                        for attention_distributions in cross_attention_distributions_list
                     ],
                     dim=1,
                 )

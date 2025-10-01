@@ -44,7 +44,7 @@ class PointerGeneratorTokenizer:
             with open("word_level_vocab.json", "w", encoding="utf-8") as f:
                 json.dump(self.vocab, f, ensure_ascii=False, indent=2)
 
-        self.id_to_token = {id: token for token, id in self.vocab.items()}
+        self.id2token = {id: token for token, id in self.vocab.items()}
 
     def encode(self, text):
         tokens = []
@@ -75,10 +75,12 @@ class PointerGeneratorTokenizer:
 
         while i < len(ids):
             tok_id = ids[i]
-            tok = self.id_to_token.get(tok_id, "<unk>")
+            tok = self.id2token.get(tok_id, "<unk>")
 
+            if tok == "</s>" or tok == "<pad>":
+                return result
             if tok == "<CAP>" and i + 1 < len(ids):
-                next_tok = self.id_to_token.get(ids[i + 1], "<unk>")
+                next_tok = self.id2token.get(ids[i + 1], "<unk>")
                 word = next_tok.capitalize()
                 result += (
                     " "
@@ -90,7 +92,7 @@ class PointerGeneratorTokenizer:
                 ) + word
                 i += 2
             elif tok == "<ALLCAP>" and i + 1 < len(ids):
-                next_tok = self.id_to_token.get(ids[i + 1], "<unk>")
+                next_tok = self.id2token.get(ids[i + 1], "<unk>")
                 word = next_tok.upper()
                 result += (
                     " "
@@ -130,6 +132,9 @@ class PointerGeneratorTokenizer:
 
     def token_to_id(self, token):
         return self.vocab.get(token, self.vocab["<unk>"])
+
+    def id_to_token(self, id):
+        return self.id2token.get(id, "<unk>")
 
 
 class TransformerTokenizer:
