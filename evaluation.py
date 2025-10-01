@@ -166,7 +166,7 @@ if __name__ == "__main__":
     figure, ax = plt.subplots(figsize=(12, 6))
     for i, MODEL in enumerate(MODELS):
         values = [metrics[MODEL][metric] for metric in METRICS]
-        ax.bar(x + i * width, values, width, label=MODEL)
+        ax.bar(x + i * width + 0.375, values, width, label=MODEL)
 
     ax.set_xticks(x + 0.75)
     ax.set_xticklabels([metric.upper() for metric in METRICS])
