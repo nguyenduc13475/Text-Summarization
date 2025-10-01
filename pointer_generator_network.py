@@ -190,6 +190,7 @@ class PointerGeneratorNetwork(nn.Module):
     def train_one_batch(
         self, batch_input_ids, batch_target_ids, oov_lists, input_lengths=None
     ):
+        self.train()
         losses = self.compute_loss(
             batch_input_ids, batch_target_ids, oov_lists, input_lengths
         )
@@ -202,6 +203,7 @@ class PointerGeneratorNetwork(nn.Module):
     def validate_one_batch(
         self, batch_input_ids, batch_target_ids, oov_lists, input_lengths=None
     ):
+        self.eval()
         with torch.no_grad():
             losses = self.compute_loss(
                 batch_input_ids, batch_target_ids, oov_lists, input_lengths

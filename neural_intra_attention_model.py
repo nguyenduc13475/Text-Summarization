@@ -393,6 +393,7 @@ class NeuralIntraAttentionModel(nn.Module):
         max_reinforce_length=100,
         target_texts=None,
     ):
+        self.train()
         losses = self.compute_loss(
             batch_input_ids,
             batch_target_ids,
@@ -416,6 +417,7 @@ class NeuralIntraAttentionModel(nn.Module):
         max_reinforce_length=100,
         target_texts=None,
     ):
+        self.eval()
         with torch.no_grad():
             losses = self.compute_loss(
                 batch_input_ids,
