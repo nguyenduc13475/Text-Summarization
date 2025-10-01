@@ -210,7 +210,7 @@ class Transformer(nn.Module):
         return torch.where(
             ids >= self.vocab_size,
             torch.tensor(self.unknown_token, device=self.device),
-            ids.to,
+            ids,
         )
 
     def _safe_embed(self, ids):
