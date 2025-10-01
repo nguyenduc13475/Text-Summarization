@@ -115,14 +115,12 @@ if __name__ == "__main__":
                 singleton_ds.tokenizer,
                 output_ids,
                 oov_list,
-                singleton_ds.vocab_size,
                 return_output="both",
             )
             input_tokens = token_ids_to_text(
                 singleton_ds.tokenizer,
                 input_ids,
                 oov_list,
-                singleton_ds.vocab_size,
                 return_output="list",
             )
 

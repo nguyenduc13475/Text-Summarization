@@ -15,7 +15,8 @@ def tensor_dict_to_scalar(d):
     return {k: v.item() for k, v in d.items()}
 
 
-def token_ids_to_text(tokenizer, ids, oov_list, vocab_size, return_output="text"):
+def token_ids_to_text(tokenizer, ids, oov_list, return_output="text"):
+    vocab_size = tokenizer.get_vocab_size()
     if isinstance(ids, torch.Tensor):
         ids = ids.tolist()
     if return_output == "text":

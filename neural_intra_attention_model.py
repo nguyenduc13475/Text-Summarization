@@ -334,7 +334,6 @@ class NeuralIntraAttentionModel(nn.Module):
                             self.tokenizer,
                             sampling_sequence,
                             oov_lists[batch_idx],
-                            self.vocab_size,
                         ),
                         (
                             target_texts[batch_idx]
@@ -343,7 +342,6 @@ class NeuralIntraAttentionModel(nn.Module):
                                 self.tokenizer,
                                 batch_target_ids[batch_idx],
                                 oov_lists[batch_idx],
-                                self.vocab_size,
                             )
                         ),
                     )
@@ -357,7 +355,6 @@ class NeuralIntraAttentionModel(nn.Module):
                             self.tokenizer,
                             greedy_sequence,
                             oov_lists[batch_idx],
-                            self.vocab_size,
                         ),
                         (
                             target_texts[batch_idx]
@@ -366,7 +363,6 @@ class NeuralIntraAttentionModel(nn.Module):
                                 self.tokenizer,
                                 batch_target_ids[batch_idx],
                                 oov_lists[batch_idx],
-                                self.vocab_size,
                             )
                         ),
                     )

@@ -9,23 +9,33 @@ nltk.download("punkt", quiet=True)
 nltk.download("punkt_tab", quiet=True)
 
 
-def text_rank_summarize(article, top_sentences=3):
-    sentences = sent_tokenize(article)
-    if len(sentences) <= top_sentences:
-        return " ".join(sentences)
+def text_rank_summarize(articles, top_sentences=3):
+    if not isinstance(articles, list):
+        articles = [articles]
 
-    sentence_embeddings = TfidfVectorizer().fit_transform(sentences)
-    similarity_matrix = (sentence_embeddings * sentence_embeddings.T).toarray()
+    summaries = []
+    for article in articles:
+        sentences = sent_tokenize(article)
+        if len(sentences) <= top_sentences:
+            summaries.append(" ".join(sentences))
+            break
 
-    sentence_graph = nx.from_numpy_array(similarity_matrix)
-    scores = nx.pagerank(sentence_graph)
+        sentence_embeddings = TfidfVectorizer().fit_transform(sentences)
+        similarity_matrix = (sentence_embeddings * sentence_embeddings.T).toarray()
 
-    ranked_sentences = sorted(
-        ((scores[i], s, i) for i, s in enumerate(sentences)), reverse=True
-    )
-    selected_sentences = sorted(ranked_sentences[:top_sentences], key=lambda x: x[2])
-    summary = " ".join([s for (_, s, _) in selected_sentences])
-    return summary
+        sentence_graph = nx.from_numpy_array(similarity_matrix)
+        scores = nx.pagerank(sentence_graph)
+
+        ranked_sentences = sorted(
+            ((scores[i], s, i) for i, s in enumerate(sentences)), reverse=True
+        )
+        selected_sentences = sorted(
+            ranked_sentences[:top_sentences], key=lambda x: x[2]
+        )
+        summary = " ".join([s for (_, s, _) in selected_sentences])
+        summaries.append(summary)
+
+    return summaries
 
 
 if __name__ == "__main__":
@@ -33,7 +43,7 @@ if __name__ == "__main__":
         article = dataset[i]["article"]
         target_summary = dataset[i]["highlights"]
 
-        text_rank_summary = text_rank_summarize(article, top_sentences=3)
+        text_rank_summary = text_rank_summarize(article, top_sentences=3)[0]
 
         print("=" * 80)
         print("Article:\n", article[:700], "...")

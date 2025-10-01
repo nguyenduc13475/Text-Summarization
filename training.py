@@ -258,7 +258,6 @@ if __name__ == "__main__":
                             tokenizer,
                             output_ids,
                             oov_list,
-                            tokenizer.get_vocab_size(),
                         )
 
                         for metric in METRICS:

@@ -22,7 +22,8 @@ class CNNDailyMailDataset(Dataset):
     ):
         super().__init__()
         self.tokenizer = tokenizer
-        self.vocab_size = self.tokenizer.get_vocab_size()
+        if tokenizer is not None:
+            self.vocab_size = self.tokenizer.get_vocab_size()
 
         if split in ["train", "cross validation", "test", "validation"]:
             if CNNDailyMailDataset.full_ds is None:
@@ -68,6 +69,11 @@ class CNNDailyMailDataset(Dataset):
 
     def __getitem__(self, idx):
         sample = self.ds[idx]
+        if self.tokenizer is None:
+            return {
+                "input_text": sample["article"],
+                "target_text": sample["highlights"],
+            }
         article, hightlights = sample["article"], sample["highlights"]
 
         encoded_article = self.tokenizer.encode(article)
