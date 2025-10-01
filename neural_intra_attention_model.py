@@ -4,7 +4,7 @@ import torch.nn.functional as F
 import torch.nn.init as init
 import torch.optim as optim
 
-from beam_search import beam_search
+from beam_search import BeamSearch
 from metrics import compute_metric
 from utils import tensor_dict_to_scalar, token_ids_to_text
 
@@ -77,6 +77,16 @@ class NeuralIntraAttentionModel(nn.Module):
         self.rl_loss_factor = rl_loss_factor
         self.loss_scale = 1e-3
 
+    def _safe_ids(self, ids):
+        return torch.where(
+            ids >= self.vocab_size,
+            torch.tensor(self.unknown_token, device=self.device),
+            ids.to(self.device),
+        )
+
+    def _safe_embed(self, ids):
+        return self.embedding_layer(self._safe_ids(ids))
+
     def compute_loss(
         self,
         batch_input_ids,
@@ -102,13 +112,7 @@ class NeuralIntraAttentionModel(nn.Module):
             self.embedding_layer.weight[self.end_token :] @ self.vocab_proj
         )
 
-        batch_embeddings = self.embedding_layer(
-            torch.where(
-                batch_input_ids >= self.vocab_size,
-                torch.tensor(self.unknown_token, device=self.device),
-                batch_input_ids,
-            )
-        )
+        batch_embeddings = self._safe_embed(batch_input_ids)
 
         batch_encoder_hidden_states, (
             encoder_final_hidden_states,
@@ -234,11 +238,7 @@ class NeuralIntraAttentionModel(nn.Module):
                         self.concat_state_to_switch(concat_states)
                     ).squeeze(1)
                     next_tokens = batch_target_ids[:, t]
-                    current_tokens = torch.where(
-                        next_tokens >= self.vocab_size,
-                        torch.tensor(self.unknown_token, device=self.device),
-                        next_tokens,
-                    )
+                    current_tokens = self._safe_ids(next_tokens)
                     next_token_probs = p_gens * F.pad(
                         vocab_distributions, (self.end_token, max_num_oovs)
                     ).gather(1, next_tokens.unsqueeze(1)).squeeze(1) + (1 - p_gens) * (
@@ -280,11 +280,7 @@ class NeuralIntraAttentionModel(nn.Module):
                         + next_token_log_probs * is_continues
                     )
                     is_continues = is_continues * (next_tokens != self.end_token)
-                    current_tokens = torch.where(
-                        next_tokens >= self.vocab_size,
-                        torch.tensor(self.unknown_token, device=self.device),
-                        next_tokens,
-                    )
+                    current_tokens = self._safe_ids(next_tokens)
 
                     sampling_sequence_steps = (
                         torch.where(is_continues.bool(), next_tokens, self.end_token)
@@ -305,11 +301,7 @@ class NeuralIntraAttentionModel(nn.Module):
 
                     next_tokens = torch.argmax(final_distributions, dim=1)
                     is_continues = is_continues * (next_tokens != self.end_token)
-                    current_tokens = torch.where(
-                        next_tokens >= self.vocab_size,
-                        torch.tensor(self.unknown_token, device=self.device),
-                        next_tokens,
-                    )
+                    current_tokens = self._safe_ids(next_tokens)
 
                     greedy_sequence_steps = (
                         torch.where(is_continues.bool(), next_tokens, self.end_token)
@@ -437,178 +429,251 @@ class NeuralIntraAttentionModel(nn.Module):
 
     def infer(
         self,
-        input_ids,
+        batch_input_ids,
         max_output_length=100,
         beam_width=4,
         return_attention=False,
         return_embedding=False,
     ):
-        input_ids = input_ids.to(self.device)
-
-        num_oovs = (
-            max(input_ids.max().item(), self.vocab_size - 1) - self.vocab_size + 1
-        )
-        embeddings = self.embedding_layer(
-            torch.where(
-                input_ids >= self.vocab_size,
-                torch.tensor(self.unknown_token, device=self.device),
-                input_ids,
+        self.eval()
+        with torch.no_grad():
+            beam_width = min(beam_width, self.vocab_size)
+            if batch_input_ids.dim() == 1:
+                batch_input_ids = batch_input_ids.unsqueeze(0)
+            batch_size = batch_input_ids.shape[0]
+            beam_search = BeamSearch(
+                batch_size, beam_width, self.start_token, self.end_token, self.device
             )
-        )
-        encoder_hidden_states, (
-            encoder_final_hidden_state,
-            _,
-        ) = self.encoder(embeddings)
-
-        out_proj = F.tanh(
-            self.embedding_layer.weight[self.end_token :] @ self.vocab_proj
-        )
-
-        def predictor(state):
-            nonlocal out_proj, return_attention
-            new_state = dict()
-            current_embedding = self.embedding_layer(
-                torch.tensor(
-                    (
-                        state["sequence"][-1]
-                        if state["sequence"][-1] < self.vocab_size
-                        else self.unknown_token
-                    ),
-                    device=self.device,
-                )
-            )
-            new_state["decoder_hidden_state"], new_state["decoder_cell_state"] = (
-                self.decoder_cell(
-                    current_embedding,
-                    (state["decoder_hidden_state"], state["decoder_cell_state"]),
-                )
+            num_oovs = (
+                max(batch_input_ids.max().item(), self.vocab_size - 1)
+                - self.vocab_size
+                + 1
             )
 
-            encoder_attention_scores = (
-                new_state["decoder_hidden_state"]
-                @ self.encoder_attn_proj
-                @ encoder_hidden_states.T
-            )
-            if len(state["sequence"]) == 1:
-                encoder_temporal_scores = encoder_attention_scores
-            else:
-                encoder_temporal_scores = (
-                    torch.exp(encoder_attention_scores)
-                    / state["cummulative_encoder_attention_scores"]
-                )
-
-            encoder_attention_distribution = F.softmax(encoder_temporal_scores, dim=0)
-            encoder_context_vector = (
-                encoder_attention_distribution @ encoder_hidden_states
+            out_proj = F.tanh(
+                self.embedding_layer.weight[self.end_token :] @ self.vocab_proj
             )
 
-            if len(state["sequence"]) == 1:
-                decoder_context_vector = torch.zeros(
-                    self.hidden_dim * 2, device=self.device
-                )
-            else:
-                decoder_attention_scores = (
-                    new_state["decoder_hidden_state"]
-                    @ self.decoder_attn_proj
-                    @ state["decoder_hidden_states"].T
-                )
+            batch_embeddings = self._safe_embed(batch_input_ids)
 
-                decoder_attention_distribution = F.softmax(
-                    decoder_attention_scores, dim=0
-                )
-                decoder_context_vector = (
-                    decoder_attention_distribution @ state["decoder_hidden_states"]
-                )
+            batch_encoder_hidden_states, (
+                encoder_final_hidden_states,
+                _,
+            ) = self.encoder(batch_embeddings)
 
-            concat_state = torch.cat(
+            decoder_hidden_states = encoder_final_hidden_states.transpose(1, 0).reshape(
+                encoder_final_hidden_states.shape[1], -1
+            )
+            decoder_cell_states = torch.zeros(
+                batch_size, self.hidden_dim * 2, device=self.device
+            )
+
+            current_tokens = torch.tensor(
+                [self.start_token] * batch_size, device=self.device
+            )
+
+            current_embeddings = self.embedding_layer(current_tokens)
+            decoder_hidden_states, decoder_cell_states = self.decoder_cell(
+                current_embeddings, (decoder_hidden_states, decoder_cell_states)
+            )
+            batch_encoder_temporal_scores = (
+                (decoder_hidden_states @ self.encoder_attn_proj).unsqueeze(1)
+                @ batch_encoder_hidden_states.transpose(1, 2)
+            ).squeeze(1)
+            input_padding_mask = batch_input_ids == self.pad_token
+            batch_encoder_temporal_scores = batch_encoder_temporal_scores.masked_fill(
+                input_padding_mask, float("-inf")
+            )
+            encoder_attention_distributions = F.softmax(
+                batch_encoder_temporal_scores, dim=1
+            )
+
+            encoder_context_vectors = torch.bmm(
+                encoder_attention_distributions.unsqueeze(1),
+                batch_encoder_hidden_states,
+            ).squeeze(1)
+
+            decoder_context_vectors = torch.zeros(
+                batch_size, self.hidden_dim * 2, device=self.device
+            )
+
+            concat_states = torch.cat(
                 [
-                    new_state["decoder_hidden_state"],
-                    encoder_context_vector,
-                    decoder_context_vector,
+                    decoder_hidden_states,
+                    encoder_context_vectors,
+                    decoder_context_vectors,
                 ],
-                dim=0,
+                dim=1,
             )
 
-            vocab_distribution = F.softmax(
-                out_proj @ concat_state + self.out_bias, dim=0
+            vocab_distributions = F.softmax(
+                concat_states @ out_proj.T + self.out_bias, dim=1
             )
 
-            p_gen = F.sigmoid(self.concat_state_to_switch(concat_state)).squeeze(0)
-            generator_probs = F.pad(
-                p_gen * vocab_distribution, (self.end_token, num_oovs)
+            p_gens = F.sigmoid(self.concat_state_to_switch(concat_states))
+            batch_generator_probs = F.pad(
+                p_gens * vocab_distributions, (self.end_token, num_oovs)
             )
-            pointer_probs = (1 - p_gen) * encoder_attention_distribution
-            final_distribution = generator_probs.scatter_add(
-                0, input_ids, pointer_probs
-            )
-
-            new_state["cummulative_encoder_attention_scores"] = (
-                state["cummulative_encoder_attention_scores"] + encoder_attention_scores
+            batch_pointer_probs = (1 - p_gens) * encoder_attention_distributions
+            batch_final_distributions = batch_generator_probs.scatter_add(
+                1, batch_input_ids, batch_pointer_probs
             )
 
-            new_state["decoder_hidden_states"] = torch.cat(
-                [
-                    state["decoder_hidden_states"],
-                    new_state["decoder_hidden_state"].unsqueeze(0),
-                ],
-                dim=0,
+            chosen_tokens = beam_search.init_from_first_topk(batch_final_distributions)
+            current_embeddings = self._safe_embed(chosen_tokens)
+            decoder_hidden_states = decoder_hidden_states.repeat_interleave(
+                beam_width, dim=0
             )
+            decoder_cell_states = decoder_cell_states.repeat_interleave(
+                beam_width, dim=0
+            )
+            batch_encoder_hidden_states = batch_encoder_hidden_states.repeat_interleave(
+                beam_width, dim=0
+            )
+            batch_cummulative_encoder_attention_scores = (
+                batch_encoder_temporal_scores.repeat_interleave(beam_width, dim=0)
+            )
+            input_padding_mask = input_padding_mask.repeat_interleave(beam_width, dim=0)
+            previous_decoder_hidden_states = decoder_hidden_states.unsqueeze(1)
 
             if return_attention:
-                new_state["input_attention_distributions"] = state[
-                    "input_attention_distributions"
-                ] + [encoder_attention_distribution]
+                encoder_attention_distributions_list = [
+                    encoder_attention_distributions.repeat_interleave(beam_width, dim=0)
+                ]
+                decoder_attention_distributions_list = []
 
-                new_state["output_attention_distributions"] = state[
-                    "output_attention_distributions"
-                ] + [decoder_attention_distribution]
+            batch_input_ids = batch_input_ids.repeat_interleave(beam_width, dim=0)
 
-            return final_distribution, new_state
+            for _ in range(2, max_output_length + 1):
+                decoder_hidden_states, decoder_cell_states = self.decoder_cell(
+                    current_embeddings, (decoder_hidden_states, decoder_cell_states)
+                )
 
-        beam_search_final_state = beam_search(
-            predictor=predictor,
-            start_state={
-                "decoder_hidden_state": encoder_final_hidden_state.reshape(-1),
-                "decoder_cell_state": torch.zeros(
-                    self.hidden_dim * 2, device=self.device
-                ),
-                "cummulative_encoder_attention_scores": torch.zeros(
-                    len(input_ids), device=self.device
-                ),
-                "decoder_hidden_states": torch.empty(
-                    0, self.hidden_dim * 2, device=self.device
-                ),
-                "sequence": [self.start_token],
-            }
-            | (
-                {
-                    "input_attention_distributions": [],
-                    "output_attention_distributions": [],
-                }
-                if return_attention
-                else {}
-            ),
-            beam_width=beam_width,
-            max_state_length=max_output_length,
-            end_state_indicator=lambda state: state["sequence"][-1] == self.end_token,
-            unrepeated_trigram=True,
-        )
+                batch_encoder_attention_scores = (
+                    (decoder_hidden_states @ self.encoder_attn_proj).unsqueeze(1)
+                    @ batch_encoder_hidden_states.transpose(1, 2)
+                ).squeeze(1)
 
-        return (
-            {
-                "output_ids": beam_search_final_state["sequence"][1:],
-            }
-            | (
-                {
-                    "input_attention_distributions": (
-                        beam_search_final_state["input_attention_distributions"]
-                    ),
-                    "output_attention_distributions": (
-                        beam_search_final_state["output_attention_distributions"]
-                    ),
-                }
-                if return_attention
-                else {}
-            )
-            | ({"embedding": embeddings} if return_embedding else {})
-        )
+                batch_encoder_temporal_scores = (
+                    torch.exp(batch_encoder_attention_scores)
+                    / batch_cummulative_encoder_attention_scores
+                )
+
+                batch_encoder_temporal_scores = (
+                    batch_encoder_temporal_scores.masked_fill(
+                        input_padding_mask, float("-inf")
+                    )
+                )
+
+                encoder_attention_distributions = F.softmax(
+                    batch_encoder_temporal_scores, dim=1
+                )
+
+                encoder_context_vectors = torch.bmm(
+                    encoder_attention_distributions.unsqueeze(1),
+                    batch_encoder_hidden_states,
+                ).squeeze(1)
+
+                batch_cummulative_encoder_attention_scores = (
+                    batch_cummulative_encoder_attention_scores
+                    + batch_encoder_attention_scores
+                )
+
+                batch_decoder_attention_scores = (
+                    (decoder_hidden_states @ self.decoder_attn_proj).unsqueeze(1)
+                    @ previous_decoder_hidden_states.transpose(1, 2)
+                ).squeeze(1)
+
+                decoder_attention_distributions = F.softmax(
+                    batch_decoder_attention_scores, dim=1
+                )
+                decoder_context_vectors = torch.bmm(
+                    decoder_attention_distributions.unsqueeze(1),
+                    previous_decoder_hidden_states,
+                ).squeeze(1)
+
+                previous_decoder_hidden_states = torch.cat(
+                    [
+                        previous_decoder_hidden_states,
+                        decoder_hidden_states.unsqueeze(1),
+                    ],
+                    dim=1,
+                )
+
+                concat_states = torch.cat(
+                    [
+                        decoder_hidden_states,
+                        encoder_context_vectors,
+                        decoder_context_vectors,
+                    ],
+                    dim=1,
+                )
+
+                vocab_distributions = F.softmax(
+                    concat_states @ out_proj.T + self.out_bias, dim=1
+                )
+
+                p_gens = F.sigmoid(self.concat_state_to_switch(concat_states))
+                batch_generator_probs = F.pad(
+                    p_gens * vocab_distributions, (self.end_token, num_oovs)
+                )
+                batch_pointer_probs = (1 - p_gens) * encoder_attention_distributions
+                batch_final_distributions = batch_generator_probs.scatter_add(
+                    1, batch_input_ids, batch_pointer_probs
+                )
+
+                chosen_tokens, chosen_beam_indices = beam_search.advance(
+                    batch_final_distributions
+                )
+                current_embeddings = self._safe_embed(chosen_tokens)
+                batch_input_ids = batch_input_ids[chosen_beam_indices]
+
+                if return_attention:
+                    encoder_attention_distributions_list.append(
+                        encoder_attention_distributions
+                    )
+                    for i in range(len(encoder_attention_distributions_list)):
+                        encoder_attention_distributions_list[i] = (
+                            encoder_attention_distributions_list[i][chosen_beam_indices]
+                        )
+
+                    decoder_attention_distributions_list.append(
+                        decoder_attention_distributions
+                    )
+                    for i in range(len(decoder_attention_distributions_list)):
+                        decoder_attention_distributions_list[i] = (
+                            decoder_attention_distributions_list[i][chosen_beam_indices]
+                        )
+
+                if beam_search.finishes.all():
+                    break
+
+            chosen_beam_indices = beam_search.finalize_best_beams()
+
+            output = {"output_ids": beam_search.sequences[chosen_beam_indices, 1:]}
+            if return_embedding:
+                output["input_embeddings"] = batch_embeddings
+            if return_attention:
+                output["encoder_attention_distributions"] = torch.stack(
+                    [
+                        attention_distributions[chosen_beam_indices]
+                        for attention_distributions in encoder_attention_distributions_list
+                    ],
+                    dim=1,
+                )
+                output["decoder_attention_distributions"] = torch.stack(
+                    [
+                        torch.nn.functional.pad(
+                            attention_distributions[chosen_beam_indices],
+                            (
+                                0,
+                                len(decoder_attention_distributions_list)
+                                - attention_distributions[chosen_beam_indices].shape[1],
+                            ),
+                        )
+                        for attention_distributions in decoder_attention_distributions_list
+                    ],
+                    dim=1,
+                )
+
+            return output

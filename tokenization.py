@@ -70,8 +70,6 @@ class PointerGeneratorTokenizer:
         return Encoding(tokens=tokens, ids=ids)
 
     def decode(self, ids):
-        if isinstance(ids, torch.Tensor):
-            ids = ids.tolist()
         result = ""
         i = 0
 

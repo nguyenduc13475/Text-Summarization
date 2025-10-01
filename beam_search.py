@@ -1,47 +1,92 @@
-import heapq
-
 import torch
 
 
-def beam_search(
-    predictor,
-    start_state,
-    beam_width=3,
-    max_state_length=20,
-    end_state_indicator=None,
-    unrepeated_trigram=False,
-):
-    beams = [(0.0, start_state)]
+class BeamSearch:
+    def __init__(self, batch_size, beam_width, start_token, end_token, device):
+        self.batch_size = batch_size
+        self.beam_width = beam_width
+        self.start_token = start_token
+        self.end_token = end_token
+        self.device = device
 
-    for _ in range(max_state_length):
-        candidates = []
-        for score, state in beams:
-            if end_state_indicator is not None and end_state_indicator(state):
-                candidates.append((score, state))
-                continue
+        self.sequences = torch.full(
+            (batch_size * beam_width, 1),
+            start_token,
+            dtype=torch.long,
+            device=device,
+        )
 
-            state_distribution, new_state = predictor(state)
-            log_probs = torch.log(state_distribution + 1e-9)
+        self.scores = None
+        self.finishes = None
 
-            for token_idx, log_prob in enumerate(log_probs):
-                new_sequence = state["sequence"] + [token_idx]
+    def init_from_first_topk(self, batch_final_distributions):
+        batch_log_probs = torch.log(batch_final_distributions + 1e-9)
+        topk_vals, topk_idxs = torch.topk(batch_log_probs, k=self.beam_width, dim=1)
+        chosen_tokens = topk_idxs.view(-1)
+        self.sequences = torch.cat([self.sequences, chosen_tokens.unsqueeze(1)], dim=1)
+        self.scores = topk_vals.view(-1).clone()
+        self.finishes = (chosen_tokens == self.end_token).view(-1)
+        return chosen_tokens
 
-                if unrepeated_trigram and len(new_sequence) >= 3:
-                    trigram = tuple(new_sequence[-3:])
-                    existing_trigrams = set(
-                        tuple(new_sequence[i : i + 3])
-                        for i in range(len(new_sequence) - 3)
-                    )
-                    if trigram in existing_trigrams:
-                        continue
+    def advance(self, batch_final_distributions):
+        batch_log_probs = torch.log(batch_final_distributions + 1e-9)
+        if self.finishes.any():
+            finished_rows = self.finishes.nonzero(as_tuple=False).squeeze(1)
+            if finished_rows.numel() > 0:
+                batch_log_probs[finished_rows] = -1e9
+                batch_log_probs[finished_rows, self.end_token] = 0.0
 
-                candidates.append(
-                    (
-                        score + log_prob.item(),
-                        {**new_state, "sequence": new_sequence},
-                    )
-                )
+        topk_vals, topk_idxs = torch.topk(batch_log_probs, k=self.beam_width, dim=1)
 
-        beams = heapq.nlargest(beam_width, candidates, key=lambda x: x[0])
+        cand_scores = self.scores.unsqueeze(1) + topk_vals
+        cand_scores_per_input = cand_scores.view(
+            self.batch_size, self.beam_width * self.beam_width
+        )
 
-    return beams[0][1]
+        top_vals_per_input, top_idx_per_input = torch.topk(
+            cand_scores_per_input, k=self.beam_width, dim=1
+        )
+
+        chosen_tokens = (
+            topk_idxs.view(self.batch_size, self.beam_width * self.beam_width)
+            .gather(1, top_idx_per_input)
+            .view(-1)
+        )
+
+        chosen_beam_indices = (
+            top_idx_per_input // self.beam_width
+            + (
+                torch.arange(self.batch_size, device=self.device) * self.beam_width
+            ).unsqueeze(1)
+        ).view(-1)
+
+        self.sequences = torch.cat(
+            [self.sequences[chosen_beam_indices], chosen_tokens.unsqueeze(1)], dim=1
+        )
+
+        self.finishes = self.finishes[chosen_beam_indices] | (
+            chosen_tokens == self.end_token
+        )
+        self.scores = top_vals_per_input.view(-1).clone()
+
+        return chosen_tokens, chosen_beam_indices
+
+    def finalize_best_beams(self):
+        scores_per_input = self.scores.view(self.batch_size, self.beam_width)
+        finishes_per_input = self.finishes.view(self.batch_size, self.beam_width)
+
+        best_beam_per_input = torch.zeros(
+            self.batch_size, dtype=torch.long, device=self.device
+        )
+        for i in range(self.batch_size):
+            if finishes_per_input[i].any():
+                tmp = scores_per_input[i].clone()
+                tmp[~finishes_per_input[i]] = -1e9
+                best_beam_per_input[i] = torch.argmax(tmp)
+            else:
+                best_beam_per_input[i] = torch.argmax(scores_per_input[i])
+
+        return (
+            best_beam_per_input
+            + (torch.arange(self.batch_size, device=self.device) * self.beam_width)
+        ).view(-1)

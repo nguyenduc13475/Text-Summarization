@@ -3,7 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
 
-from beam_search import beam_search
+from beam_search import BeamSearch
 from utils import tensor_dict_to_scalar
 
 
@@ -206,6 +206,16 @@ class Transformer(nn.Module):
         self.optimizer = optim.Adam(self.parameters(), lr=learning_rate)
         self.loss_scale = 1e-2
 
+    def _safe_ids(self, ids):
+        return torch.where(
+            ids >= self.vocab_size,
+            torch.tensor(self.unknown_token, device=self.device),
+            ids.to(self.device),
+        )
+
+    def _safe_embed(self, ids):
+        return self.embedding_layer(self._safe_ids(ids))
+
     def make_padding_mask(self, batch_input_ids):
         mask = batch_input_ids.eq(self.pad_token)
         return mask.float().masked_fill(mask, float("-inf"))
@@ -216,16 +226,8 @@ class Transformer(nn.Module):
 
         batch_size = batch_input_ids.shape[0]
         max_target_length = batch_target_ids.shape[1]
-        batch_input_ids = torch.where(
-            batch_input_ids >= self.vocab_size,
-            torch.tensor(self.unknown_token, device=self.device),
-            batch_input_ids,
-        )
-        batch_target_ids = torch.where(
-            batch_target_ids >= self.vocab_size,
-            torch.tensor(self.unknown_token, device=self.device),
-            batch_target_ids,
-        )
+        batch_input_ids = self._safe_ids(batch_input_ids)
+        batch_target_ids = self._safe_ids(batch_target_ids)
         batch_current_tokens = torch.cat(
             [
                 torch.full((batch_size, 1), self.start_token, device=self.device),
@@ -254,7 +256,7 @@ class Transformer(nn.Module):
         input_padding_mask = self.make_padding_mask(batch_input_ids)
         current_token_padding_mask = self.make_padding_mask(batch_current_tokens)
 
-        next_token_embeddings = self.transformer(
+        decoder_outputs = self.transformer(
             batch_input_embeddings,
             batch_current_token_embeddings,
             tgt_mask=causal_mask,
@@ -264,7 +266,7 @@ class Transformer(nn.Module):
         )
 
         batch_vocab_distributions = F.pad(
-            F.softmax(self.out_proj(next_token_embeddings), dim=2), (self.end_token, 0)
+            F.softmax(self.out_proj(decoder_outputs), dim=2), (self.end_token, 0)
         )
         batch_log_probs = torch.log(batch_vocab_distributions + 1e-9)
 
@@ -288,6 +290,7 @@ class Transformer(nn.Module):
         return {"total_loss": loss}
 
     def train_one_batch(self, batch_input_ids, batch_target_ids):
+        self.train()
         losses = self.compute_loss(batch_input_ids, batch_target_ids)
 
         self.optimizer.zero_grad()
@@ -297,116 +300,108 @@ class Transformer(nn.Module):
         return tensor_dict_to_scalar(losses)
 
     def validate_one_batch(self, batch_input_ids, batch_target_ids):
+        self.eval()
         with torch.no_grad():
             losses = self.compute_loss(batch_input_ids, batch_target_ids)
             return tensor_dict_to_scalar(losses)
 
     def infer(
         self,
-        input_ids,
+        batch_input_ids,
         max_output_length=100,
         beam_width=4,
         return_attention=False,
         return_embedding=False,
     ):
-        input_embeddings = self.embedding_layer(
-            torch.where(
-                input_ids >= self.vocab_size,
-                torch.tensor(self.unknown_token, device=self.device),
-                input_ids,
-            )
-        )
+        self.eval()
+        with torch.no_grad():
+            beam_width = min(beam_width, self.vocab_size)
 
-        def _pick_head0(att_tensor):
-            if att_tensor is None:
-                return None
-            at = att_tensor
-            try:
-                return at[0, 0].detach().cpu().clone()
-            except Exception:
-                try:
-                    return at[0].detach().cpu().clone()
-                except Exception:
-                    try:
-                        return at[0].detach().cpu().clone()
-                    except Exception:
-                        return at.detach().cpu().clone()
+            if batch_input_ids.dim() == 1:
+                batch_input_ids = batch_input_ids.unsqueeze(0)
 
-        def predictor(state):
-            nonlocal return_attention
-            new_state = dict()
-            next_token_embedding = self.transformer(
-                input_embeddings, state["current_output_embeddings"]
-            )[-1]
-            new_state["current_output_embeddings"] = torch.cat(
-                [state["current_output_embeddings"], next_token_embedding.unsqueeze(0)],
-                dim=0,
+            batch_size = batch_input_ids.shape[0]
+            beam_search = BeamSearch(
+                batch_size, beam_width, self.start_token, self.end_token, self.device
             )
-            vocab_distribution = F.pad(
-                F.softmax(
-                    self.out_proj(next_token_embedding),
-                    dim=0,
-                ),
+
+            batch_input_embeddings = self._safe_embed(batch_input_ids)
+
+            input_padding_mask = self.make_padding_mask(batch_input_ids)
+
+            start_token = torch.tensor([self.start_token], device=self.device)
+            start_embedding = self.embedding_layer(start_token).unsqueeze(1)
+
+            batch_current_output_embeddings = start_embedding.repeat(batch_size, 1, 1)
+
+            decoder_outputs = self.transformer(
+                batch_input_embeddings,
+                batch_current_output_embeddings,
+                src_key_padding_mask=input_padding_mask,
+                memory_key_padding_mask=input_padding_mask,
+            )[:, -1, :]
+
+            vocab_distributions = F.pad(
+                F.softmax(self.out_proj(decoder_outputs), dim=1),
                 (self.end_token, 0),
             )
 
-            if return_attention:
-                enc_attn = _pick_head0(self.transformer.last_encoder_attn)
-                dec_attn = _pick_head0(self.transformer.last_decoder_self_attn)
-                cross_attn = _pick_head0(self.transformer.last_decoder_cross_attn)
+            chosen_tokens = beam_search.init_from_first_topk(vocab_distributions)
 
-                new_state["input_attention_distributions"] = state[
-                    "input_attention_distributions"
-                ] + [enc_attn]
-                new_state["output_attention_distributions"] = state[
-                    "output_attention_distributions"
-                ] + [dec_attn]
-                new_state["cross_attention_distributions"] = state[
-                    "cross_attention_distributions"
-                ] + [cross_attn]
-
-            return vocab_distribution, new_state
-
-        beam_search_final_state = beam_search(
-            predictor=predictor,
-            start_state={
-                "current_output_embeddings": self.embedding_layer(
-                    torch.tensor([self.start_token], device=self.device)
-                ),
-                "sequence": [self.start_token],
-            }
-            | (
-                {
-                    "input_attention_distributions": [],
-                    "output_attention_distributions": [],
-                    "cross_attention_distributions": [],
-                }
-                if return_attention
-                else {}
-            ),
-            beam_width=beam_width,
-            max_state_length=max_output_length,
-            end_state_indicator=lambda state: state["sequence"][-1] == self.end_token,
-        )
-
-        return (
-            {
-                "output_ids": beam_search_final_state["sequence"][1:],
-            }
-            | (
-                {
-                    "input_attention_distributions": (
-                        beam_search_final_state["input_attention_distributions"]
-                    ),
-                    "output_attention_distributions": (
-                        beam_search_final_state["output_attention_distributions"]
-                    ),
-                    "cross_attention_distributions": (
-                        beam_search_final_state["cross_attention_distributions"]
-                    ),
-                }
-                if return_attention
-                else {}
+            batch_current_output_embeddings = torch.cat(
+                [
+                    start_embedding.repeat(batch_size * beam_width, 1, 1),
+                    self.embedding_layer(chosen_tokens).unsqueeze(1),
+                ],
+                dim=1,
             )
-            | ({"embedding": input_embeddings} if return_embedding else {})
-        )
+
+            beam_input_embeddings = batch_input_embeddings.repeat_interleave(
+                beam_width, dim=0
+            )
+            input_padding_mask = input_padding_mask.repeat_interleave(beam_width, dim=0)
+
+            for _ in range(2, max_output_length + 1):
+                decoder_outputs = self.transformer(
+                    beam_input_embeddings,
+                    batch_current_output_embeddings,
+                    src_key_padding_mask=input_padding_mask,
+                    memory_key_padding_mask=input_padding_mask,
+                )[:, -1, :]
+
+                vocab_distributions = F.pad(
+                    F.softmax(self.out_proj(decoder_outputs), dim=1),
+                    (self.end_token, 0),
+                )
+                chosen_tokens, chosen_beam_indices = beam_search.advance(
+                    vocab_distributions
+                )
+
+                batch_current_output_embeddings = torch.cat(
+                    [
+                        batch_current_output_embeddings[chosen_beam_indices],
+                        self.embedding_layer(chosen_tokens).unsqueeze(1),
+                    ],
+                    dim=1,
+                )
+
+                if beam_search.finishes.all():
+                    break
+
+            chosen_beam_indices = beam_search.finalize_best_beams()
+
+            output = {"output_ids": beam_search.sequences[chosen_beam_indices, 1:]}
+            if return_embedding:
+                output["input_embeddings"] = batch_input_embeddings
+            if return_attention:
+                output["encoder_self_attention_distributions"] = (
+                    self.transformer.last_encoder_attn[chosen_beam_indices]
+                )
+                output["decoder_self_attention_distributions"] = (
+                    self.transformer.last_decoder_self_attn[chosen_beam_indices]
+                )
+                output["cross_attention_distributions"] = (
+                    self.transformer.last_decoder_cross_attn[chosen_beam_indices]
+                )
+
+            return output

@@ -16,6 +16,8 @@ def tensor_dict_to_scalar(d):
 
 
 def token_ids_to_text(tokenizer, ids, oov_list, vocab_size, return_output="text"):
+    if isinstance(ids, torch.Tensor):
+        ids = ids.tolist()
     if return_output == "text":
         oov_tokens = []
         for idx in ids:

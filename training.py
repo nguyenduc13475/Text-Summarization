@@ -26,7 +26,7 @@ from utils import (
 
 set_seed()
 
-MODEL = "TRANSFORMER"
+MODEL = "NEURAL_INTRA_ATTENTION_MODEL"
 CHECKPOINT_FOLDER = f"{MODEL.lower()}_checkpoints"
 NUM_EPOCHS = 2
 MAX_TOKENS_EACH_BATCH = 3000
@@ -253,7 +253,7 @@ if __name__ == "__main__":
                             input_ids,
                             max_output_length=5,
                             beam_width=2,
-                        )["output_ids"]
+                        )["output_ids"][0]
                         output_text = token_ids_to_text(
                             tokenizer,
                             output_ids,
