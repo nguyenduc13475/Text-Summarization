@@ -168,7 +168,7 @@ if __name__ == "__main__":
         values = [metrics[MODEL][metric] for metric in METRICS]
         ax.bar(x + i * width, values, width, label=MODEL)
 
-    ax.set_xticks(x + width)
+    ax.set_xticks(x + 0.75)
     ax.set_xticklabels([metric.upper() for metric in METRICS])
     ax.set_ylabel("Score")
     ax.set_title("Metrics comparison on test set")
