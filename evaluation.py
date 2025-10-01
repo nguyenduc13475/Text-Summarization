@@ -32,7 +32,7 @@ MAX_TOKENS_EACH_BATCH = 10000
 DATASET_LENGTH = 15
 ENV = detect_runtime_env()
 if ENV in ("colab", "notebook"):
-    from IPython.display import clear_output, display
+    from IPython.display import display
 
 
 def find_latest_checkpoint(checkpoint_folder):
@@ -115,8 +115,9 @@ if __name__ == "__main__":
             checkpoint_file, checkpoint_idx = find_latest_checkpoint(
                 f"{MODEL.lower()}_checkpoints"
             )
-            load_checkpoint(model, checkpoint_file, map_location=DEVICE)
-            print("Model loaded successfully!")
+            if checkpoint_file is not None:
+                load_checkpoint(model, checkpoint_file, map_location=DEVICE)
+                print("Model loaded successfully!")
 
         for batch_idx, batch in enumerate(test_loader):
             if MODEL == "TEXT_RANK":
