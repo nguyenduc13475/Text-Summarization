@@ -317,6 +317,8 @@ if __name__ == "__main__":
                     ):
                         checkpoint_idx += 1
 
+                torch.cuda.empty_cache()
+
             for loss_type, loss_values in raw_batch_loss_history.items():
                 epoch_loss_history[split][loss_type].append(
                     sum(loss_values) / epoch_num_tokens
