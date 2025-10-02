@@ -164,11 +164,11 @@ if __name__ == "__main__":
         case "POINTER_GENERATOR_NETWORK":
             model = PointerGeneratorNetwork(
                 tokenizer=tokenizer,
-                embedding_dim=128,
-                encoder_hidden_dim=256,
-                decoder_hidden_dim=256,
-                attention_dim=256,
-                bottle_neck_dim=256,
+                embedding_dim=512,
+                encoder_hidden_dim=512,
+                decoder_hidden_dim=512,
+                attention_dim=512,
+                bottle_neck_dim=512,
                 num_layers=6,
                 cov_loss_factor=1.0,
                 learning_rate=1e-3,
@@ -177,19 +177,19 @@ if __name__ == "__main__":
         case "NEURAL_INTRA_ATTENTION_MODEL":
             model = NeuralIntraAttentionModel(
                 tokenizer=tokenizer,
-                embedding_dim=128,
-                hidden_dim=160,
+                embedding_dim=512,
+                hidden_dim=512,
                 num_layers=6,
                 rl_loss_factor=0.75,
-                learning_rate=1e-4,
+                learning_rate=1e-3,
                 device=DEVICE,
             )
         case "TRANSFORMER":
             model = Transformer(
                 tokenizer=tokenizer,
-                d_model=128,
+                d_model=512,
                 nhead=8,
-                num_layers=2,
+                num_layers=6,
                 learning_rate=1e-3,
                 device=DEVICE,
             )

@@ -41,8 +41,8 @@ class NeuralIntraAttentionModel(nn.Module):
     def __init__(
         self,
         tokenizer,
-        embedding_dim=128,
-        hidden_dim=160,
+        embedding_dim=512,
+        hidden_dim=512,
         num_layers=6,
         rl_loss_factor=0.75,
         learning_rate=1e-3,
