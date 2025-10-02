@@ -35,12 +35,12 @@ class PointerGeneratorNetwork(nn.Module):
         self,
         tokenizer,
         embedding_dim=128,
-        encoder_hidden_dim=160,
-        decoder_hidden_dim=196,
-        attention_dim=224,
-        bottle_neck_dim=56,
-        cov_loss_factor=0.75,
-        learning_rate=1e-3,
+        encoder_hidden_dim=256,
+        decoder_hidden_dim=256,
+        attention_dim=256,
+        bottle_neck_dim=256,
+        cov_loss_factor=1.0,
+        learning_rate=1e-4,
         device="cpu",
     ):
         super().__init__()
