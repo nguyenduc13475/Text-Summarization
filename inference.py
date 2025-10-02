@@ -64,6 +64,7 @@ def plot_attention_heatmap(
     title_font_size=16,
     axis_font_size=14,
     show_color_bar=True,
+    display_immediately=True,
 ):
     im = ax.imshow(
         attention_distributions.detach().cpu().numpy(),
@@ -85,7 +86,8 @@ def plot_attention_heatmap(
     if show_color_bar:
         cbar = plt.colorbar(im, ax=ax)
         cbar.set_label("Attention weight", fontsize=axis_font_size)
-    adaptive_display(figure, ENV)
+    if display_immediately:
+        adaptive_display(figure, ENV)
 
 
 def plot_tsne_embeddings(ax, embeddings, tokens, title, sample_size=300):
@@ -247,6 +249,7 @@ if __name__ == "__main__":
                             title_font_size=7,
                             axis_font_size=7,
                             show_color_bar=i % cols == cols - 1 or i == num_heads - 1,
+                            display_immediately=(ENV == "gui"),
                         )
                     figure.tight_layout(pad=4)
                     adaptive_display(figure, ENV)
@@ -267,6 +270,7 @@ if __name__ == "__main__":
                             title_font_size=7,
                             axis_font_size=7,
                             show_color_bar=i % cols == cols - 1 or i == num_heads - 1,
+                            display_immediately=(ENV == "gui"),
                         )
                     figure.tight_layout(pad=4)
                     adaptive_display(figure, ENV)
@@ -287,6 +291,7 @@ if __name__ == "__main__":
                             title_font_size=7,
                             axis_font_size=7,
                             show_color_bar=i % cols == cols - 1 or i == num_heads - 1,
+                            display_immediately=(ENV == "gui"),
                         )
                     figure.tight_layout(pad=4)
                     adaptive_display(figure, ENV)
