@@ -39,19 +39,27 @@ class PointerGeneratorNetwork(nn.Module):
         decoder_hidden_dim=256,
         attention_dim=256,
         bottle_neck_dim=256,
+        num_layers=6,
         cov_loss_factor=1.0,
-        learning_rate=1e-4,
+        learning_rate=1e-3,
         device="cpu",
     ):
         super().__init__()
         self.vocab_size = tokenizer.get_vocab_size()
+        self.num_layers = num_layers
         self.embedding_layer = nn.Embedding(self.vocab_size, embedding_dim)
         self.encoder = nn.LSTM(
-            embedding_dim, encoder_hidden_dim, batch_first=True, bidirectional=True
+            embedding_dim,
+            encoder_hidden_dim,
+            batch_first=True,
+            bidirectional=True,
+            num_layers=num_layers,
         )
         self.enc_to_dec_hidden = nn.Linear(encoder_hidden_dim * 2, decoder_hidden_dim)
         self.enc_to_dec_cell = nn.Linear(encoder_hidden_dim * 2, decoder_hidden_dim)
-        self.decoder_cell = nn.LSTMCell(embedding_dim, decoder_hidden_dim)
+        self.decoder = nn.LSTM(
+            embedding_dim, decoder_hidden_dim, batch_first=True, num_layers=num_layers
+        )
         self.enc_hidden_to_attn = nn.Linear(encoder_hidden_dim * 2, attention_dim)
         self.dec_hidden_to_attn = nn.Linear(
             decoder_hidden_dim, attention_dim, bias=False
@@ -109,12 +117,15 @@ class PointerGeneratorNetwork(nn.Module):
             encoder_final_hidden_states,
             encoder_final_cell_states,
         ) = self.encoder(batch_embeddings)
-
-        encoder_final_hidden_states = encoder_final_hidden_states.transpose(
-            1, 0
-        ).reshape(batch_size, -1)
-        encoder_final_cell_states = encoder_final_cell_states.transpose(1, 0).reshape(
-            batch_size, -1
+        encoder_final_hidden_states = (
+            encoder_final_hidden_states.reshape(self.num_layers, 2, batch_size, -1)
+            .transpose(1, 2)
+            .reshape(self.num_layers, batch_size, -1)
+        )
+        encoder_final_cell_states = (
+            encoder_final_cell_states.reshape(self.num_layers, 2, batch_size, -1)
+            .transpose(1, 2)
+            .reshape(self.num_layers, batch_size, -1)
         )
 
         decoder_hidden_states = self.enc_to_dec_hidden(encoder_final_hidden_states)
@@ -131,12 +142,13 @@ class PointerGeneratorNetwork(nn.Module):
         for t in range(max_target_length):
             current_embeddings = self.embedding_layer(current_tokens)
 
-            decoder_hidden_states, decoder_cell_states = self.decoder_cell(
-                current_embeddings, (decoder_hidden_states, decoder_cell_states)
+            _, (decoder_hidden_states, decoder_cell_states) = self.decoder(
+                current_embeddings.unsqueeze(1),
+                (decoder_hidden_states, decoder_cell_states),
             )
             batch_attention_scores = F.tanh(
                 self.enc_hidden_to_attn(batch_encoder_hidden_states)
-                + self.dec_hidden_to_attn(decoder_hidden_states).unsqueeze(1)
+                + self.dec_hidden_to_attn(decoder_hidden_states[-1]).unsqueeze(1)
                 + self.coverage_to_attn(coverage_vectors.unsqueeze(2))
             )
             batch_attention_scores = self.attn_proj(batch_attention_scores).squeeze(2)
@@ -148,7 +160,9 @@ class PointerGeneratorNetwork(nn.Module):
             context_vectors = torch.bmm(
                 attention_distributions.unsqueeze(1), batch_encoder_hidden_states
             ).squeeze(1)
-            hidden_contexts = torch.cat([decoder_hidden_states, context_vectors], dim=1)
+            hidden_contexts = torch.cat(
+                [decoder_hidden_states[-1], context_vectors], dim=1
+            )
             vocab_distributions = F.softmax(
                 self.vocab_proj_2(
                     self.bottle_neck_activation(self.vocab_proj_1(hidden_contexts))
@@ -157,7 +171,7 @@ class PointerGeneratorNetwork(nn.Module):
             )
             p_gens = F.sigmoid(
                 self.context_to_switch(context_vectors)
-                + self.dec_hidden_to_switch(decoder_hidden_states)
+                + self.dec_hidden_to_switch(decoder_hidden_states[-1])
                 + self.embedding_to_switch(current_embeddings)
             ).squeeze(1)
 
@@ -244,13 +258,16 @@ class PointerGeneratorNetwork(nn.Module):
                 encoder_final_hidden_states,
                 encoder_final_cell_states,
             ) = self.encoder(batch_embeddings)
-
-            encoder_final_hidden_states = encoder_final_hidden_states.transpose(
-                1, 0
-            ).reshape(batch_size, -1)
-            encoder_final_cell_states = encoder_final_cell_states.transpose(
-                1, 0
-            ).reshape(batch_size, -1)
+            encoder_final_hidden_states = (
+                encoder_final_hidden_states.reshape(self.num_layers, 2, batch_size, -1)
+                .transpose(1, 2)
+                .reshape(self.num_layers, batch_size, -1)
+            )
+            encoder_final_cell_states = (
+                encoder_final_cell_states.reshape(self.num_layers, 2, batch_size, -1)
+                .transpose(1, 2)
+                .reshape(self.num_layers, batch_size, -1)
+            )
 
             decoder_hidden_states = self.enc_to_dec_hidden(encoder_final_hidden_states)
             decoder_cell_states = self.enc_to_dec_cell(encoder_final_cell_states)
@@ -260,12 +277,13 @@ class PointerGeneratorNetwork(nn.Module):
             )
 
             current_embeddings = self.embedding_layer(current_tokens)
-            decoder_hidden_states, decoder_cell_states = self.decoder_cell(
-                current_embeddings, (decoder_hidden_states, decoder_cell_states)
+            _, (decoder_hidden_states, decoder_cell_states) = self.decoder(
+                current_embeddings.unsqueeze(1),
+                (decoder_hidden_states, decoder_cell_states),
             )
             batch_attention_scores = F.tanh(
                 self.enc_hidden_to_attn(batch_encoder_hidden_states)
-                + self.dec_hidden_to_attn(decoder_hidden_states).unsqueeze(1)
+                + self.dec_hidden_to_attn(decoder_hidden_states[-1]).unsqueeze(1)
             )
             batch_attention_scores = self.attn_proj(batch_attention_scores).squeeze(2)
             input_padding_mask = batch_input_ids == self.pad_token
@@ -277,7 +295,9 @@ class PointerGeneratorNetwork(nn.Module):
             context_vectors = torch.bmm(
                 attention_distributions.unsqueeze(1), batch_encoder_hidden_states
             ).squeeze(1)
-            hidden_contexts = torch.cat([decoder_hidden_states, context_vectors], dim=1)
+            hidden_contexts = torch.cat(
+                [decoder_hidden_states[-1], context_vectors], dim=1
+            )
             vocab_distributions = F.softmax(
                 self.vocab_proj_2(
                     self.bottle_neck_activation(self.vocab_proj_1(hidden_contexts))
@@ -286,7 +306,7 @@ class PointerGeneratorNetwork(nn.Module):
             )
             p_gens = F.sigmoid(
                 self.context_to_switch(context_vectors)
-                + self.dec_hidden_to_switch(decoder_hidden_states)
+                + self.dec_hidden_to_switch(decoder_hidden_states[-1])
                 + self.embedding_to_switch(current_embeddings)
             )
 
@@ -301,10 +321,10 @@ class PointerGeneratorNetwork(nn.Module):
             chosen_tokens = beam_search.init_from_first_topk(batch_final_distributions)
             current_embeddings = self._safe_embed(chosen_tokens)
             decoder_hidden_states = decoder_hidden_states.repeat_interleave(
-                beam_width, dim=0
+                beam_width, dim=1
             )
             decoder_cell_states = decoder_cell_states.repeat_interleave(
-                beam_width, dim=0
+                beam_width, dim=1
             )
             coverage_vectors = attention_distributions.repeat_interleave(
                 beam_width, dim=0
@@ -318,13 +338,17 @@ class PointerGeneratorNetwork(nn.Module):
             batch_input_ids = batch_input_ids.repeat_interleave(beam_width, dim=0)
 
             for _ in range(2, max_output_length + 1):
-                decoder_hidden_states, decoder_cell_states = self.decoder_cell(
-                    current_embeddings, (decoder_hidden_states, decoder_cell_states)
+                _, (decoder_hidden_states, decoder_cell_states) = self.decoder(
+                    current_embeddings.unsqueeze(1),
+                    (
+                        decoder_hidden_states,
+                        decoder_cell_states,
+                    ),
                 )
 
                 batch_attention_scores = F.tanh(
                     self.enc_hidden_to_attn(batch_encoder_hidden_states)
-                    + self.dec_hidden_to_attn(decoder_hidden_states).unsqueeze(1)
+                    + self.dec_hidden_to_attn(decoder_hidden_states[-1]).unsqueeze(1)
                     + self.coverage_to_attn(coverage_vectors.unsqueeze(2))
                 )
                 batch_attention_scores = self.attn_proj(batch_attention_scores).squeeze(
@@ -340,7 +364,7 @@ class PointerGeneratorNetwork(nn.Module):
                     attention_distributions.unsqueeze(1), batch_encoder_hidden_states
                 ).squeeze(1)
                 hidden_contexts = torch.cat(
-                    [decoder_hidden_states, context_vectors], dim=1
+                    [decoder_hidden_states[-1], context_vectors], dim=1
                 )
                 vocab_distributions = F.softmax(
                     self.vocab_proj_2(
@@ -350,7 +374,7 @@ class PointerGeneratorNetwork(nn.Module):
                 )
                 p_gens = F.sigmoid(
                     self.context_to_switch(context_vectors)
-                    + self.dec_hidden_to_switch(decoder_hidden_states)
+                    + self.dec_hidden_to_switch(decoder_hidden_states[-1])
                     + self.embedding_to_switch(current_embeddings)
                 )
 

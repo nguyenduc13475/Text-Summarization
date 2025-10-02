@@ -43,17 +43,25 @@ class NeuralIntraAttentionModel(nn.Module):
         tokenizer,
         embedding_dim=128,
         hidden_dim=160,
+        num_layers=6,
         rl_loss_factor=0.75,
         learning_rate=1e-3,
         device="cpu",
     ):
         super().__init__()
         self.vocab_size = tokenizer.get_vocab_size()
+        self.num_layers = num_layers
         self.embedding_layer = nn.Embedding(self.vocab_size, embedding_dim)
         self.encoder = nn.LSTM(
-            embedding_dim, hidden_dim, batch_first=True, bidirectional=True
+            embedding_dim,
+            hidden_dim,
+            batch_first=True,
+            bidirectional=True,
+            num_layers=num_layers,
         )
-        self.decoder_cell = nn.LSTMCell(embedding_dim, hidden_dim * 2)
+        self.decoder = nn.LSTM(
+            embedding_dim, hidden_dim * 2, batch_first=True, num_layers=num_layers
+        )
         self.encoder_attn_proj = nn.Parameter(
             torch.randn(hidden_dim * 2, hidden_dim * 2)
         )
@@ -140,11 +148,13 @@ class NeuralIntraAttentionModel(nn.Module):
         ]
 
         for mode in modes:
-            decoder_hidden_states = encoder_final_hidden_states.transpose(1, 0).reshape(
-                encoder_final_hidden_states.shape[1], -1
+            decoder_hidden_states = (
+                encoder_final_hidden_states.reshape(self.num_layers, 2, batch_size, -1)
+                .transpose(1, 2)
+                .reshape(self.num_layers, batch_size, -1)
             )
             decoder_cell_states = torch.zeros(
-                batch_size, self.hidden_dim * 2, device=self.device
+                self.num_layers, batch_size, self.hidden_dim * 2, device=self.device
             )
             current_tokens = torch.tensor(
                 [self.start_token] * batch_size, device=self.device
@@ -171,12 +181,13 @@ class NeuralIntraAttentionModel(nn.Module):
 
             for t in range(mode["max_steps"]):
                 current_embeddings = self.embedding_layer(current_tokens)
-                decoder_hidden_states, decoder_cell_states = self.decoder_cell(
-                    current_embeddings, (decoder_hidden_states, decoder_cell_states)
+                _, (decoder_hidden_states, decoder_cell_states) = self.decoder(
+                    current_embeddings.unsqueeze(1),
+                    (decoder_hidden_states, decoder_cell_states),
                 )
 
                 batch_encoder_attention_scores = (
-                    (decoder_hidden_states @ self.encoder_attn_proj).unsqueeze(1)
+                    (decoder_hidden_states[-1] @ self.encoder_attn_proj).unsqueeze(1)
                     @ batch_encoder_hidden_states.transpose(1, 2)
                 ).squeeze(1)
 
@@ -208,7 +219,9 @@ class NeuralIntraAttentionModel(nn.Module):
                     )
                 else:
                     batch_decoder_attention_scores = (
-                        (decoder_hidden_states @ self.decoder_attn_proj).unsqueeze(1)
+                        (decoder_hidden_states[-1] @ self.decoder_attn_proj).unsqueeze(
+                            1
+                        )
                         @ previous_decoder_hidden_states.transpose(1, 2)
                     ).squeeze(1)
 
@@ -222,7 +235,7 @@ class NeuralIntraAttentionModel(nn.Module):
 
                 concat_states = torch.cat(
                     [
-                        decoder_hidden_states,
+                        decoder_hidden_states[-1],
                         encoder_context_vectors,
                         decoder_context_vectors,
                     ],
@@ -318,7 +331,7 @@ class NeuralIntraAttentionModel(nn.Module):
                 previous_decoder_hidden_states = torch.cat(
                     [
                         previous_decoder_hidden_states,
-                        decoder_hidden_states.unsqueeze(1),
+                        decoder_hidden_states[-1].unsqueeze(1),
                     ],
                     dim=1,
                 )
@@ -464,11 +477,13 @@ class NeuralIntraAttentionModel(nn.Module):
                 _,
             ) = self.encoder(batch_embeddings)
 
-            decoder_hidden_states = encoder_final_hidden_states.transpose(1, 0).reshape(
-                encoder_final_hidden_states.shape[1], -1
+            decoder_hidden_states = (
+                encoder_final_hidden_states.reshape(self.num_layers, 2, batch_size, -1)
+                .transpose(1, 2)
+                .reshape(self.num_layers, batch_size, -1)
             )
             decoder_cell_states = torch.zeros(
-                batch_size, self.hidden_dim * 2, device=self.device
+                self.num_layers, batch_size, self.hidden_dim * 2, device=self.device
             )
 
             current_tokens = torch.tensor(
@@ -476,11 +491,12 @@ class NeuralIntraAttentionModel(nn.Module):
             )
 
             current_embeddings = self.embedding_layer(current_tokens)
-            decoder_hidden_states, decoder_cell_states = self.decoder_cell(
-                current_embeddings, (decoder_hidden_states, decoder_cell_states)
+            _, (decoder_hidden_states, decoder_cell_states) = self.decoder(
+                current_embeddings.unsqueeze(1),
+                (decoder_hidden_states, decoder_cell_states),
             )
             batch_encoder_temporal_scores = (
-                (decoder_hidden_states @ self.encoder_attn_proj).unsqueeze(1)
+                (decoder_hidden_states[-1] @ self.encoder_attn_proj).unsqueeze(1)
                 @ batch_encoder_hidden_states.transpose(1, 2)
             ).squeeze(1)
             input_padding_mask = batch_input_ids == self.pad_token
@@ -502,7 +518,7 @@ class NeuralIntraAttentionModel(nn.Module):
 
             concat_states = torch.cat(
                 [
-                    decoder_hidden_states,
+                    decoder_hidden_states[-1],
                     encoder_context_vectors,
                     decoder_context_vectors,
                 ],
@@ -525,10 +541,10 @@ class NeuralIntraAttentionModel(nn.Module):
             chosen_tokens = beam_search.init_from_first_topk(batch_final_distributions)
             current_embeddings = self._safe_embed(chosen_tokens)
             decoder_hidden_states = decoder_hidden_states.repeat_interleave(
-                beam_width, dim=0
+                beam_width, dim=1
             )
             decoder_cell_states = decoder_cell_states.repeat_interleave(
-                beam_width, dim=0
+                beam_width, dim=1
             )
             batch_encoder_hidden_states = batch_encoder_hidden_states.repeat_interleave(
                 beam_width, dim=0
@@ -537,7 +553,7 @@ class NeuralIntraAttentionModel(nn.Module):
                 batch_encoder_temporal_scores.repeat_interleave(beam_width, dim=0)
             )
             input_padding_mask = input_padding_mask.repeat_interleave(beam_width, dim=0)
-            previous_decoder_hidden_states = decoder_hidden_states.unsqueeze(1)
+            previous_decoder_hidden_states = decoder_hidden_states[-1].unsqueeze(1)
 
             if return_attention:
                 cross_attention_distributions_list = [
@@ -548,12 +564,13 @@ class NeuralIntraAttentionModel(nn.Module):
             batch_input_ids = batch_input_ids.repeat_interleave(beam_width, dim=0)
 
             for _ in range(2, max_output_length + 1):
-                decoder_hidden_states, decoder_cell_states = self.decoder_cell(
-                    current_embeddings, (decoder_hidden_states, decoder_cell_states)
+                _, (decoder_hidden_states, decoder_cell_states) = self.decoder(
+                    current_embeddings.unsqueeze(1),
+                    (decoder_hidden_states, decoder_cell_states),
                 )
 
                 batch_encoder_attention_scores = (
-                    (decoder_hidden_states @ self.encoder_attn_proj).unsqueeze(1)
+                    (decoder_hidden_states[-1] @ self.encoder_attn_proj).unsqueeze(1)
                     @ batch_encoder_hidden_states.transpose(1, 2)
                 ).squeeze(1)
 
@@ -583,7 +600,7 @@ class NeuralIntraAttentionModel(nn.Module):
                 )
 
                 batch_decoder_attention_scores = (
-                    (decoder_hidden_states @ self.decoder_attn_proj).unsqueeze(1)
+                    (decoder_hidden_states[-1] @ self.decoder_attn_proj).unsqueeze(1)
                     @ previous_decoder_hidden_states.transpose(1, 2)
                 ).squeeze(1)
 
@@ -598,14 +615,14 @@ class NeuralIntraAttentionModel(nn.Module):
                 previous_decoder_hidden_states = torch.cat(
                     [
                         previous_decoder_hidden_states,
-                        decoder_hidden_states.unsqueeze(1),
+                        decoder_hidden_states[-1].unsqueeze(1),
                     ],
                     dim=1,
                 )
 
                 concat_states = torch.cat(
                     [
-                        decoder_hidden_states,
+                        decoder_hidden_states[-1],
                         encoder_context_vectors,
                         decoder_context_vectors,
                     ],

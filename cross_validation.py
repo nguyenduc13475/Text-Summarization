@@ -70,7 +70,7 @@ if __name__ == "__main__":
                 axes[i].grid(True)
 
             figure.tight_layout(pad=2.0)
-            adative_display(figure, ENV)
+            adaptive_display(figure, ENV)
 
             line_2ds = defaultdict(lambda: None)
 
@@ -83,6 +83,7 @@ if __name__ == "__main__":
                     decoder_hidden_dim=196,
                     attention_dim=224,
                     bottle_neck_dim=56,
+                    num_layers=6,
                     cov_loss_factor=0.75,
                     learning_rate=1e-3,
                     device=DEVICE,
@@ -92,6 +93,7 @@ if __name__ == "__main__":
                     tokenizer=tokenizer,
                     embedding_dim=128,
                     hidden_dim=160,
+                    num_layers=6,
                     rl_loss_factor=0.75,
                     learning_rate=1e-4,
                     device=DEVICE,

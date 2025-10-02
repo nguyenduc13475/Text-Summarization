@@ -34,7 +34,7 @@ TRAIN_DATASET_LENGTH = 200
 VALIDATION_DATASET_LENGTH = 10
 CONTINUE_TRAINING = False
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
-LOSS_LOG_MODE = "graph"
+LOSS_LOG_MODE = "console"
 LOSS_LOG_INTERVAL = 5
 ENV = detect_runtime_env()
 METRICS = [
@@ -144,7 +144,7 @@ if __name__ == "__main__":
             batch_sampler=DynamicBatchSampler(
                 ds["train"],
                 max_tokens=MAX_TOKENS_EACH_BATCH,
-                shuffle=True,
+                shuffle=False,
             ),
             pin_memory=True if DEVICE == "cuda" else False,
         ),
@@ -169,8 +169,9 @@ if __name__ == "__main__":
                 decoder_hidden_dim=256,
                 attention_dim=256,
                 bottle_neck_dim=256,
+                num_layers=6,
                 cov_loss_factor=1.0,
-                learning_rate=5e-4,
+                learning_rate=1e-3,
                 device=DEVICE,
             )
         case "NEURAL_INTRA_ATTENTION_MODEL":
@@ -178,6 +179,7 @@ if __name__ == "__main__":
                 tokenizer=tokenizer,
                 embedding_dim=128,
                 hidden_dim=160,
+                num_layers=6,
                 rl_loss_factor=0.75,
                 learning_rate=1e-4,
                 device=DEVICE,
