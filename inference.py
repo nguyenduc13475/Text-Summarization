@@ -214,6 +214,7 @@ if __name__ == "__main__":
                         "Generated summary tokens",
                         "Neural Intra Attention Heatmap (Summary -> Input)",
                         title_font_size=10,
+                        display_immediately=(ENV == "gui"),
                     )
 
                     plot_attention_heatmap(
@@ -225,6 +226,7 @@ if __name__ == "__main__":
                         "Generated summary tokens",
                         "Neural Intra Attention Heatmap (Summary -> Summary)",
                         title_font_size=10,
+                        display_immediately=(ENV == "gui"),
                     )
                     figure.tight_layout(pad=2)
                     adaptive_display(figure, ENV)
