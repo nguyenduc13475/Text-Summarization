@@ -29,9 +29,9 @@ set_seed()
 MODEL = "POINTER_GENERATOR_NETWORK"
 CHECKPOINT_FOLDER = f"{MODEL.lower()}_checkpoints"
 NUM_EPOCHS = 100
-MAX_TOKENS_EACH_BATCH = 7000
-TRAIN_DATASET_LENGTH = None
-VALIDATION_DATASET_LENGTH = None
+MAX_TOKENS_EACH_BATCH = 8000
+TRAIN_DATASET_LENGTH = 100
+VALIDATION_DATASET_LENGTH = 100
 CONTINUE_TRAINING = False
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 LOSS_LOG_MODE = "graph"
@@ -165,7 +165,7 @@ if __name__ == "__main__":
                 attention_dim=256,
                 bottle_neck_dim=256,
                 cov_loss_factor=1.0,
-                learning_rate=1e-4,
+                learning_rate=5e-4,
                 device=DEVICE,
             )
         case "NEURAL_INTRA_ATTENTION_MODEL":
@@ -225,7 +225,7 @@ if __name__ == "__main__":
                             batch["target_ids"],
                             batch["oov_list"],
                             batch["input_length"],
-                            max_reinforce_length=100,
+                            max_reinforce_length=200,
                             target_texts=batch["target_text"],
                         )
                     case "TRANSFORMER":
@@ -244,8 +244,8 @@ if __name__ == "__main__":
                 if split == "validation":
                     batch_output_ids = model.infer(
                         batch["input_ids"],
-                        max_output_length=5,
-                        beam_width=2,
+                        max_output_length=200,
+                        beam_width=3,
                     )["output_ids"]
 
                     output_texts = [
@@ -372,7 +372,6 @@ if __name__ == "__main__":
         )
 
         if LOSS_LOG_MODE == "graph":
-            # tạo 1 graph cho tất cả metrics
             for metric, values in metric_history.items():
                 for (
                     metric,
