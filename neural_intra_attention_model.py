@@ -344,7 +344,7 @@ class NeuralIntraAttentionModel(nn.Module):
                                 oov_lists[batch_idx],
                             )
                         ),
-                    )
+                    )["rouge2"][0]
                     sampling_sequence_metrics.append(sampling_sequence_metric)
             elif mode["name"] == "greedy":
                 greedy_sequence_metrics = []
@@ -365,7 +365,7 @@ class NeuralIntraAttentionModel(nn.Module):
                                 oov_lists[batch_idx],
                             )
                         ),
-                    )
+                    )["rouge2"][0]
                     greedy_sequence_metrics.append(greedy_sequence_metric)
 
         rl_loss = (

@@ -146,13 +146,10 @@ if __name__ == "__main__":
                     )
                 ]
 
-            for metric in METRICS:
-                for candidate_summary, reference_summary in zip(
-                    candidate_summaries, reference_summaries
-                ):
-                    metrics[MODEL][metric].append(
-                        compute_metric(metric, candidate_summary, reference_summary)
-                    )
+            for metric, values in compute_metric(
+                METRICS, candidate_summaries, reference_summaries
+            ).items():
+                metrics[MODEL][metric].extend(values)
 
         print("=================================================")
         print(f"Validation metrics for {MODEL}:")

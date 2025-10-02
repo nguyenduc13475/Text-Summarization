@@ -29,7 +29,7 @@ set_seed()
 MODEL = "POINTER_GENERATOR_NETWORK"
 CHECKPOINT_FOLDER = f"{MODEL.lower()}_checkpoints"
 NUM_EPOCHS = 100
-MAX_TOKENS_EACH_BATCH = 5000
+MAX_TOKENS_EACH_BATCH = 7000
 TRAIN_DATASET_LENGTH = None
 VALIDATION_DATASET_LENGTH = None
 CONTINUE_TRAINING = False
@@ -242,24 +242,27 @@ if __name__ == "__main__":
                     raw_batch_loss_history[loss_type].append(loss_value)
 
                 if split == "validation":
-                    for input_ids, oov_list, target_text in zip(
-                        batch["input_ids"], batch["oov_list"], batch["target_text"]
-                    ):
-                        output_ids = model.infer(
-                            input_ids,
-                            max_output_length=5,
-                            beam_width=2,
-                        )["output_ids"][0]
-                        output_text = token_ids_to_text(
+                    batch_output_ids = model.infer(
+                        batch["input_ids"],
+                        max_output_length=5,
+                        beam_width=2,
+                    )["output_ids"]
+
+                    output_texts = [
+                        token_ids_to_text(
                             tokenizer,
                             output_ids,
                             oov_list,
                         )
+                        for output_ids, oov_list in zip(
+                            batch_output_ids, batch["oov_list"]
+                        )
+                    ]
 
-                        for metric in METRICS:
-                            metrics[metric].append(
-                                compute_metric(metric, output_text, target_text)
-                            )
+                    for metric, values in compute_metric(
+                        METRICS, output_texts, batch["target_text"]
+                    ).items():
+                        metrics[metric].extend(values)
 
                 if (
                     split == "train"

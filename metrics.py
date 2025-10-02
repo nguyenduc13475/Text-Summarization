@@ -1,4 +1,5 @@
 import re
+from collections import defaultdict
 
 import bert_score
 import nltk
@@ -16,83 +17,123 @@ logging.set_verbosity_error()
 nltk.download("wordnet", quiet=True)
 
 
-def compute_metric(metric, candidate_text, reference_text, beta=8):
-    # ROUGE-N
-    m = re.match(r"^rouge(\d+)$", metric, re.I)
-    if m:
-        N = int(m.group(1))
-        if not (1 <= N <= 9):
-            raise ValueError(f"rouge_score only supports ROUGE-N with N from 1 to 9")
+def compute_metric(metrics, candidate_texts, reference_texts, beta=8):
+    if not isinstance(metrics, list):
+        metrics = [metrics]
+    if not isinstance(candidate_texts, list):
+        candidate_texts = [candidate_texts]
+    if not isinstance(reference_texts, list):
+        reference_texts = [reference_texts]
+    result = defaultdict(list)
+    for metric in metrics:
+        # ROUGE-N
+        m = re.match(r"^rouge(\d+)$", metric, re.I)
+        if m:
+            scorer = rouge_scorer.RougeScorer([metric], use_stemmer=True)
+            for candidate_text, reference_text in zip(candidate_texts, reference_texts):
+                scores = scorer.score(
+                    " ".join(reference_text.split()), " ".join(candidate_text.split())
+                )
+                result[metric].append(scores[metric].recall)
+            continue
 
-        scorer = rouge_scorer.RougeScorer([metric.lower()], use_stemmer=True)
-        scores = scorer.score(
-            " ".join(reference_text.split()), " ".join(candidate_text.split())
-        )
-        return scores[metric.lower()].recall
+        # ROUGE-L
+        if metric == "rougeL":
+            scorer = rouge_scorer.RougeScorer([metric], use_stemmer=True)
+            for candidate_text, reference_text in zip(candidate_texts, reference_texts):
+                scores = scorer.score(
+                    " ".join(reference_text.split()), " ".join(candidate_text.split())
+                )
 
-    # ROUGE-L
-    if metric == "rougeL":
-        scorer = rouge_scorer.RougeScorer([metric], use_stemmer=True)
-        scores = scorer.score(
-            " ".join(reference_text.split()), " ".join(candidate_text.split())
-        )
+                precision = scores[metric].precision
+                recall = scores[metric].recall
+                if precision + recall == 0:
+                    result[metric].append(0.0)
+                else:
+                    beta2 = beta**2
+                    result[metric].append(
+                        (1 + beta2) * precision * recall / (beta2 * precision + recall)
+                    )
+            continue
 
-        precision = scores[metric].precision
-        recall = scores[metric].recall
-        if precision + recall == 0:
-            return 0.0
-        beta2 = beta**2
-        return (1 + beta2) * precision * recall / (beta2 * precision + recall)
+        # BLEU
+        m = re.match(r"^bleu(\d+)$", metric, re.I)
+        if m:
+            N = int(m.group(1))
+            for candidate_text, reference_text in zip(candidate_texts, reference_texts):
+                result[metric].append(
+                    sentence_bleu(
+                        [reference_text.split()],
+                        candidate_text.split(),
+                        weights=[1 / N] * N,
+                        smoothing_function=SmoothingFunction().method1,
+                    )
+                )
+            continue
 
-    # BLEU
-    m = re.match(r"^bleu(\d+)$", metric, re.I)
-    if m:
-        N = int(m.group(1))
-        return sentence_bleu(
-            [reference_text.split()],
-            candidate_text.split(),
-            weights=[1 / N] * N,
-            # smoothing to avoid log 0 (add every where)
-            smoothing_function=SmoothingFunction().method1,
-        )
+        # METEOR
+        if metric == "meteor":
+            for candidate_text, reference_text in zip(candidate_texts, reference_texts):
+                result[metric].append(
+                    meteor_score([reference_text.split()], candidate_text.split())
+                )
+            continue
 
-    # METEOR
-    if metric == "meteor":
-        return meteor_score([reference_text.split()], candidate_text.split())
+        # BERTScore
+        if metric == "bertscore":
+            _, _, F1 = bert_score.score(
+                candidate_texts, reference_texts, lang="en", verbose=False
+            )
+            result[metric] = F1.tolist()
+            continue
 
-    # BERTScore
-    if metric == "bertscore":
-        _, _, F1 = bert_score.score(
-            [candidate_text], [reference_text], lang="en", verbose=False
-        )
-        return float(F1.mean())
+        # MoverScore
+        if metric == "moverscore":
+            model = SentenceTransformer("all-mpnet-base-v2")
 
-    # MoverScore
-    if metric == "moverscore":
-        model = SentenceTransformer("all-mpnet-base-v2")
+            candidate_embeddings = model.encode(
+                ["I have a chicken.", "I have a cock"],
+                output_value="token_embeddings",
+                convert_to_tensor=True,
+            )
+            reference_embeddings = model.encode(
+                ["I have a chicken.", "I have a bitch."],
+                output_value="token_embeddings",
+                convert_to_tensor=True,
+            )
+            candidate_embeddings = [
+                F.normalize(candidate_embedding, p=2, dim=1)
+                for candidate_embedding in candidate_embeddings
+            ]
+            reference_embeddings = [
+                F.normalize(reference_embedding, p=2, dim=1)
+                for reference_embedding in reference_embeddings
+            ]
 
-        candidate_embedding = model.encode(
-            candidate_text,
-            output_value="token_embeddings",
-            convert_to_tensor=True,
-        )
-        reference_embedding = model.encode(
-            reference_text,
-            output_value="token_embeddings",
-            convert_to_tensor=True,
-        )
+            costs = [
+                1 - torch.mm(candidate_embedding, reference_embedding.T)
+                for candidate_embedding, reference_embedding in zip(
+                    candidate_embeddings, reference_embeddings
+                )
+            ]
+            a_s = [
+                torch.ones(candidate_embedding.size(0)) / candidate_embedding.size(0)
+                for candidate_embedding in candidate_embeddings
+            ]
+            b_s = [
+                torch.ones(reference_embedding.size(0)) / reference_embedding.size(0)
+                for reference_embedding in reference_embeddings
+            ]
 
-        candidate_embedding = F.normalize(candidate_embedding, p=2, dim=1)
-        reference_embedding = F.normalize(reference_embedding, p=2, dim=1)
+            emds = [
+                ot.emd2(a.numpy(), b.numpy(), cost.detach().cpu().numpy())
+                for a, b, cost in zip(a_s, b_s, costs)
+            ]
+            scores = [1 - emd for emd in emds]
+            result[metric] = scores
+            continue
 
-        cost = 1 - torch.mm(candidate_embedding, reference_embedding.T)
+        else:
+            raise ValueError(f"Metric '{metric}' is not supported.")
 
-        a = torch.ones(candidate_embedding.size(0)) / candidate_embedding.size(0)
-        b = torch.ones(reference_embedding.size(0)) / reference_embedding.size(0)
-
-        emd = ot.emd2(a.numpy(), b.numpy(), cost.detach().cpu().numpy())
-        score = 1 - emd
-        return score
-
-    else:
-        raise ValueError(f"Metric '{metric}' is not supported.")
+    return result
