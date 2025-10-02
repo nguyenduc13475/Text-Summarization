@@ -28,23 +28,18 @@ set_seed()
 
 MODEL = "POINTER_GENERATOR_NETWORK"
 CHECKPOINT_FOLDER = f"{MODEL.lower()}_checkpoints"
-NUM_EPOCHS = 100
+NUM_EPOCHS = 200
 MAX_TOKENS_EACH_BATCH = 8000
-TRAIN_DATASET_LENGTH = 200
-VALIDATION_DATASET_LENGTH = 10
+TRAIN_DATASET_LENGTH = None
+VALIDATION_DATASET_LENGTH = None
 CONTINUE_TRAINING = False
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 LOSS_LOG_MODE = "graph"
-LOSS_LOG_INTERVAL = 5
+LOSS_LOG_INTERVAL = 10
 ENV = detect_runtime_env()
-METRICS = [
-    "rouge1",
-    "rouge2",
-    "rougeL",
-    # "bleu4", "meteor", "bertscore", "moverscore"
-]
-MODEL_SAVE_INTERVAL = 5
-CHECKPOINT_INTERVAL = 5
+METRICS = ["rouge1", "rouge2", "rougeL", "bleu4", "meteor", "bertscore", "moverscore"]
+MODEL_SAVE_INTERVAL = 10
+CHECKPOINT_INTERVAL = 10
 
 if ENV in ("colab", "notebook"):
     from IPython.display import clear_output, display
