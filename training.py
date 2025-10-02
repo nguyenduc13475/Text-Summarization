@@ -37,7 +37,12 @@ DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 LOSS_LOG_MODE = "graph"
 LOSS_LOG_INTERVAL = 5
 ENV = detect_runtime_env()
-METRICS = ["rouge1", "rouge2", "rougeL", "bleu4", "meteor", "bertscore", "moverscore"]
+METRICS = [
+    "rouge1",
+    "rouge2",
+    "rougeL",
+    # "bleu4", "meteor", "bertscore", "moverscore"
+]
 MODEL_SAVE_INTERVAL = 5
 CHECKPOINT_INTERVAL = 5
 
