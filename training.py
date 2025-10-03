@@ -327,6 +327,9 @@ if __name__ == "__main__":
                         model, f"{CHECKPOINT_FOLDER}/checkpoint{checkpoint_idx + 1}.pt"
                     )
 
+                    if ENV == "colab" and os.path.exists("/content/drive/MyDrive"):
+                        save_checkpoint(model, "/content/drive/MyDrive/temp_model.pt")
+
                     with open(LAST_TRAIN_STEP_FILE, "wb") as f:
                         pickle.dump(
                             (
