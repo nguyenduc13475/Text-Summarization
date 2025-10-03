@@ -27,9 +27,9 @@ MODELS = [
     "TRANSFORMER",
 ]
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
-METRICS = ["rouge1", "rouge2", "rougeL", "bleu4", "meteor"]
+METRICS = ["rouge1", "rouge2", "rougeL", "bleu4", "meteor", "bertscore", "moverscore"]
 MAX_TOKENS_EACH_BATCH = 10000
-DATASET_LENGTH = 15
+DATASET_LENGTH = 1500
 ENV = detect_runtime_env()
 if ENV in ("colab", "notebook"):
     from IPython.display import display

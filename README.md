@@ -30,10 +30,10 @@ Ngoài ra, nhóm cũng cài đặt **TextRank** để tham khảo.
 
 ## 📊 Dataset
 
-Nhóm sử dụng **CNN/Daily Mail Dataset** gồm:
-- **Train**: 287,113 samples  
-- **Validation**: 13,368 samples  
-- **Test**: 11,490 samples  
+Nhóm sử dụng **CNN/Daily Mail Dataset**. Do kích thước tương đối lớn, nhóm chỉ sử dụng một phần nhỏ của dataset này, gồm:
+- **Train**: 10,000 sample ngẫu nhiên trong tổng cộng 287,113 sample gốc
+- **Validation**: 1,500 sample ngẫu nhiên trong 13,368 sample gốc
+- **Test**: 1,500 sample ngẫu nhiên trong 11,490 sample gốc
 
 Mỗi sample có cấu trúc:
 ```json
