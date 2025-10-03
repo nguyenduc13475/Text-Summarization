@@ -229,6 +229,7 @@ if __name__ == "__main__":
             else:
                 epoch_num_tokens = 0
                 raw_batch_loss_history = defaultdict(list)
+            num_samples = 0
             for batch_idx, batch in enumerate(loader[split]):
                 if CONTINUE_TRAINING and batch_idx <= latest_batch_idx:
                     continue
@@ -236,6 +237,7 @@ if __name__ == "__main__":
                     CONTINUE_TRAINING = False
                 batch_num_tokens = batch["target_length"].sum().item()
                 epoch_num_tokens += batch_num_tokens
+                num_samples += len(batch["input_ids"])
                 match MODEL:
                     case "POINTER_GENERATOR_NETWORK":
                         losses = batch_step(
@@ -267,6 +269,9 @@ if __name__ == "__main__":
                     raw_batch_loss_history[loss_type].append(loss_value)
 
                 if split == "validation":
+                    print(
+                        f"Validated {num_samples}/{VALIDATION_DATASET_LENGTH} samples"
+                    )
                     batch_output_ids = model.infer(
                         batch["input_ids"],
                         max_output_length=200,
