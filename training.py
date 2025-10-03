@@ -30,7 +30,7 @@ set_seed()
 MODEL = "POINTER_GENERATOR_NETWORK"
 CHECKPOINT_FOLDER = f"{MODEL.lower()}_checkpoints"
 NUM_EPOCHS = 200
-MAX_TOKENS_EACH_BATCH = 8000
+MAX_TOKENS_EACH_BATCH = 10000
 TRAIN_DATASET_LENGTH = 10000
 VALIDATION_DATASET_LENGTH = 1500
 CONTINUE_TRAINING = True
@@ -327,9 +327,6 @@ if __name__ == "__main__":
                         model, f"{CHECKPOINT_FOLDER}/checkpoint{checkpoint_idx + 1}.pt"
                     )
 
-                    if ENV == "colab" and os.path.exists("/content/drive/MyDrive"):
-                        save_checkpoint(model, "/content/drive/MyDrive/temp_model.pt")
-
                     with open(LAST_TRAIN_STEP_FILE, "wb") as f:
                         pickle.dump(
                             (
@@ -343,6 +340,24 @@ if __name__ == "__main__":
                             ),
                             f,
                         )
+
+                    if ENV == "colab" and os.path.exists("/content/drive/MyDrive"):
+                        save_checkpoint(model, "/content/drive/MyDrive/temp_model.pt")
+                        with open(
+                            "/content/drive/MyDrive/temp_train_step.pkl", "wb"
+                        ) as f:
+                            pickle.dump(
+                                (
+                                    epoch,
+                                    batch_idx,
+                                    epoch_loss_history,
+                                    batch_loss_history,
+                                    metric_history,
+                                    epoch_num_tokens,
+                                    raw_batch_loss_history,
+                                ),
+                                f,
+                            )
 
                     save_count += 1
                     print(

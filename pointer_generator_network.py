@@ -83,6 +83,8 @@ class PointerGeneratorNetwork(nn.Module):
         self.apply(init_weights)
         self.to(device)
         self.optimizer = optim.Adam(self.parameters(), lr=learning_rate)
+        if self.device.type == "cuda":
+            self.scaler = torch.amp.GradScaler()
         self.cov_loss_factor = cov_loss_factor
         self.loss_scale = 1e-3
 
@@ -205,13 +207,23 @@ class PointerGeneratorNetwork(nn.Module):
         self, batch_input_ids, batch_target_ids, oov_lists, input_lengths=None
     ):
         self.train()
-        losses = self.compute_loss(
-            batch_input_ids, batch_target_ids, oov_lists, input_lengths
-        )
-
         self.optimizer.zero_grad()
-        (losses["total_loss"] * self.loss_scale).backward()
-        self.optimizer.step()
+
+        if self.device.type == "cuda":
+            with torch.amp.autocast(device_type="cuda"):
+                losses = self.compute_loss(
+                    batch_input_ids, batch_target_ids, oov_lists, input_lengths
+                )
+            self.scaler.scale(losses["total_loss"] * self.loss_scale).backward()
+            self.scaler.step(self.optimizer)
+            self.scaler.update()
+        else:
+            losses = self.compute_loss(
+                batch_input_ids, batch_target_ids, oov_lists, input_lengths
+            )
+            (losses["total_loss"] * self.loss_scale).backward()
+            self.optimizer.step()
+
         return tensor_dict_to_scalar(losses)
 
     def validate_one_batch(
