@@ -204,6 +204,8 @@ class Transformer(nn.Module):
 
         self.to(device)
         self.optimizer = optim.Adam(self.parameters(), lr=learning_rate)
+        if self.device.type == "cuda":
+            self.scaler = torch.amp.GradScaler()
         self.loss_scale = 1e-2
 
     def _safe_ids(self, ids):
@@ -291,11 +293,18 @@ class Transformer(nn.Module):
 
     def train_one_batch(self, batch_input_ids, batch_target_ids):
         self.train()
-        losses = self.compute_loss(batch_input_ids, batch_target_ids)
-
         self.optimizer.zero_grad()
-        (losses["total_loss"] * self.loss_scale).backward()
-        self.optimizer.step()
+
+        if self.device.type == "cuda":
+            with torch.amp.autocast(device_type="cuda"):
+                losses = self.compute_loss(batch_input_ids, batch_target_ids)
+            self.scaler.scale(losses["total_loss"] * self.loss_scale).backward()
+            self.scaler.step(self.optimizer)
+            self.scaler.update()
+        else:
+            losses = self.compute_loss(batch_input_ids, batch_target_ids)
+            (losses["total_loss"] * self.loss_scale).backward()
+            self.optimizer.step()
 
         return tensor_dict_to_scalar(losses)
 

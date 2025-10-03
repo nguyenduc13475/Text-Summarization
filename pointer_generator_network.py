@@ -3,6 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch.nn.init as init
 import torch.optim as optim
+from torch.nn.utils.rnn import pack_padded_sequence, pad_packed_sequence
 
 from beam_search import BeamSearch
 from utils import tensor_dict_to_scalar
@@ -115,10 +116,19 @@ class PointerGeneratorNetwork(nn.Module):
         max_target_length = batch_target_ids.shape[1]
 
         batch_embeddings = self._safe_embed(batch_input_ids)
+
         batch_encoder_hidden_states, (
             encoder_final_hidden_states,
             encoder_final_cell_states,
-        ) = self.encoder(batch_embeddings)
+        ) = self.encoder(
+            pack_padded_sequence(
+                batch_embeddings, input_lengths, batch_first=True, enforce_sorted=False
+            )
+        )
+        batch_encoder_hidden_states, _ = pad_packed_sequence(
+            batch_encoder_hidden_states, batch_first=True
+        )
+
         encoder_final_hidden_states = (
             encoder_final_hidden_states.reshape(self.num_layers, 2, batch_size, -1)
             .transpose(1, 2)

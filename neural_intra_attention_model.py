@@ -82,6 +82,8 @@ class NeuralIntraAttentionModel(nn.Module):
 
         self.to(device)
         self.optimizer = optim.Adam(self.parameters(), lr=learning_rate)
+        if self.device.type == "cuda":
+            self.scaler = torch.amp.GradScaler()
         self.rl_loss_factor = rl_loss_factor
         self.loss_scale = 1e-3
 
@@ -403,18 +405,33 @@ class NeuralIntraAttentionModel(nn.Module):
         target_texts=None,
     ):
         self.train()
-        losses = self.compute_loss(
-            batch_input_ids,
-            batch_target_ids,
-            oov_lists,
-            input_lengths,
-            max_reinforce_length,
-            target_texts,
-        )
-
         self.optimizer.zero_grad()
-        (losses["total_loss"] * self.loss_scale).backward()
-        self.optimizer.step()
+
+        if self.device.type == "cuda":
+            with torch.amp.autocast(device_type="cuda"):
+                losses = self.compute_loss(
+                    batch_input_ids,
+                    batch_target_ids,
+                    oov_lists,
+                    input_lengths,
+                    max_reinforce_length,
+                    target_texts,
+                )
+            self.scaler.scale(losses["total_loss"] * self.loss_scale).backward()
+            self.scaler.step(self.optimizer)
+            self.scaler.update()
+        else:
+            losses = self.compute_loss(
+                batch_input_ids,
+                batch_target_ids,
+                oov_lists,
+                input_lengths,
+                max_reinforce_length,
+                target_texts,
+            )
+            (losses["total_loss"] * self.loss_scale).backward()
+            self.optimizer.step()
+
         return tensor_dict_to_scalar(losses)
 
     def validate_one_batch(
