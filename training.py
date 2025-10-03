@@ -137,7 +137,7 @@ if __name__ == "__main__":
             batch_sampler=DynamicBatchSampler(
                 ds["train"],
                 max_tokens=MAX_TOKENS_EACH_BATCH,
-                shuffle=False,
+                shuffle=True,
             ),
             pin_memory=True if DEVICE == "cuda" else False,
         ),
@@ -147,7 +147,7 @@ if __name__ == "__main__":
             batch_sampler=DynamicBatchSampler(
                 ds["validation"],
                 max_tokens=MAX_TOKENS_EACH_BATCH,
-                shuffle=False,
+                shuffle=True,
             ),
             pin_memory=True if DEVICE == "cuda" else False,
         ),
