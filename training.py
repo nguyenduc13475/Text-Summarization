@@ -35,7 +35,6 @@ TRAIN_DATASET_LENGTH = None
 VALIDATION_DATASET_LENGTH = None
 CONTINUE_TRAINING = True
 LAST_TRAIN_STEP_FILE = f"{CHECKPOINT_FOLDER}/last_train_step.pkl"
-TRAIN_STEP_SAVE_INTERVAL = 50
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 LOSS_LOG_MODE = "graph"
 LOSS_LOG_INTERVAL = 10
@@ -86,19 +85,15 @@ if __name__ == "__main__":
     loss_log_file = open("loss_log.txt", "w")
 
     if LOSS_LOG_MODE == "graph":
-        if LOSS_LOG_INTERVAL is not None:
-            figure = plt.figure(figsize=(10, 10))
-            batch_ax = figure.add_subplot(2, 2, 1)
-            epoch_ax = figure.add_subplot(2, 2, 2)
-            metric_ax = figure.add_subplot(2, 2, 3)
-            batch_ax.set_xlabel("Batch/Epoch Progress")
-            batch_ax.set_ylabel("Average Loss Per Token")
-            batch_ax.set_title(f"Loss Curves")
-            batch_ax.grid(True)
-            batch_line_2ds = defaultdict(lambda: None)
-        else:
-            figure = plt.figure(figsize=(5, 10))
-            epoch_ax, metric_ax = figure.subplots(1, 2).flatten()
+        figure = plt.figure(figsize=(10, 10))
+        batch_ax = figure.add_subplot(2, 2, 1)
+        epoch_ax = figure.add_subplot(2, 2, 2)
+        metric_ax = figure.add_subplot(2, 2, 3)
+        batch_ax.set_xlabel("Batch/Epoch Progress")
+        batch_ax.set_ylabel("Average Loss Per Token")
+        batch_ax.set_title(f"Loss Curves")
+        batch_ax.grid(True)
+        batch_line_2ds = defaultdict(lambda: None)
 
         try_set_window_position(0, 0)
 
@@ -294,11 +289,7 @@ if __name__ == "__main__":
                     ).items():
                         metrics[metric].extend(values)
 
-                if (
-                    split == "train"
-                    and LOSS_LOG_INTERVAL is not None
-                    and batch_idx % LOSS_LOG_INTERVAL == 0
-                ):
+                if split == "train" and batch_idx % LOSS_LOG_INTERVAL == 0:
                     average_loss_per_token = losses["total_loss"] / batch_num_tokens
                     log = f"Epoch {epoch} / Batch {batch_idx} : Average Loss Per Token is {average_loss_per_token}"
                     match LOSS_LOG_MODE:
@@ -331,26 +322,11 @@ if __name__ == "__main__":
                                 clear_output(wait=True)
                                 display(figure)
 
-                if (
-                    split == "train"
-                    and MODEL_SAVE_INTERVAL is not None
-                    and batch_idx % MODEL_SAVE_INTERVAL == 0
-                ):
+                if split == "train" and batch_idx % MODEL_SAVE_INTERVAL == 0:
                     save_checkpoint(
                         model, f"{CHECKPOINT_FOLDER}/checkpoint{checkpoint_idx + 1}.pt"
                     )
-                    save_count += 1
-                    print(
-                        f"Model saved successfully! (Check point {checkpoint_idx + 1})"
-                    )
 
-                    if (
-                        CHECKPOINT_INTERVAL is not None
-                        and save_count % CHECKPOINT_INTERVAL == 0
-                    ):
-                        checkpoint_idx += 1
-
-                if split == "train" and batch_idx % TRAIN_STEP_SAVE_INTERVAL == 0:
                     with open(LAST_TRAIN_STEP_FILE, "wb") as f:
                         pickle.dump(
                             (
@@ -364,6 +340,14 @@ if __name__ == "__main__":
                             ),
                             f,
                         )
+
+                    save_count += 1
+                    print(
+                        f"Model saved successfully! (Check point {checkpoint_idx + 1})"
+                    )
+
+                    if save_count % CHECKPOINT_INTERVAL == 0:
+                        checkpoint_idx += 1
 
                 torch.cuda.empty_cache()
 

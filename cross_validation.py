@@ -164,11 +164,7 @@ if __name__ == "__main__":
                             loss_value / batch_num_tokens
                         )
 
-                    if (
-                        split == "train"
-                        and LOSS_LOG_INTERVAL is not None
-                        and batch_idx % LOSS_LOG_INTERVAL == 0
-                    ):
+                    if split == "train" and batch_idx % LOSS_LOG_INTERVAL == 0:
                         average_loss_per_token = losses["total_loss"] / batch_num_tokens
                         log = f"Fold {fold} / Epoch {epoch} / Batch {batch_idx} : Average Loss Per Token is {average_loss_per_token}"
                         match LOSS_LOG_MODE:

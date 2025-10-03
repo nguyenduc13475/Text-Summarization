@@ -3,9 +3,8 @@ import os
 import re
 from collections import Counter
 
-import torch
 from datasets import load_dataset
-from tokenizers import ByteLevelBPETokenizer, CharBPETokenizer
+from tokenizers import ByteLevelBPETokenizer
 
 CONTROL_TOKENS = {"<CAP>", "<ALLCAP>"}
 
