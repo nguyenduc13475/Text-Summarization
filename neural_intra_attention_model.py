@@ -3,6 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch.nn.init as init
 import torch.optim as optim
+from torch.nn.utils.rnn import pack_padded_sequence, pad_packed_sequence
 
 from beam_search import BeamSearch
 from metrics import compute_metric
@@ -109,6 +110,7 @@ class NeuralIntraAttentionModel(nn.Module):
         batch_input_ids = batch_input_ids.to(self.device)
         batch_target_ids = batch_target_ids.to(self.device)
         if input_lengths is not None:
+            input_lengths_cpu = input_lengths
             input_lengths = input_lengths.to(self.device)
 
         max_num_oovs = 0
@@ -127,7 +129,17 @@ class NeuralIntraAttentionModel(nn.Module):
         batch_encoder_hidden_states, (
             encoder_final_hidden_states,
             _,
-        ) = self.encoder(batch_embeddings)
+        ) = self.encoder(
+            pack_padded_sequence(
+                batch_embeddings,
+                input_lengths_cpu,
+                batch_first=True,
+                enforce_sorted=False,
+            )
+        )
+        batch_encoder_hidden_states, _ = pad_packed_sequence(
+            batch_encoder_hidden_states, batch_first=True
+        )
 
         nll_losses = torch.zeros(batch_size, device=self.device)
 
