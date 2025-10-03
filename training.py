@@ -41,7 +41,7 @@ LOSS_LOG_INTERVAL = 10
 ENV = detect_runtime_env()
 METRICS = ["rouge1", "rouge2", "rougeL", "bleu4", "meteor", "bertscore", "moverscore"]
 MODEL_SAVE_INTERVAL = 10
-CHECKPOINT_INTERVAL = 10
+CHECKPOINT_INTERVAL = 5
 
 if ENV in ("colab", "notebook"):
     from IPython.display import clear_output, display
