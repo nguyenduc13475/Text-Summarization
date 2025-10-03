@@ -105,6 +105,7 @@ class PointerGeneratorNetwork(nn.Module):
         batch_input_ids = batch_input_ids.to(self.device)
         batch_target_ids = batch_target_ids.to(self.device)
         if input_lengths is not None:
+            input_lengths_cpu = input_lengths
             input_lengths = input_lengths.to(self.device)
 
         max_num_oovs = 0
@@ -122,7 +123,10 @@ class PointerGeneratorNetwork(nn.Module):
             encoder_final_cell_states,
         ) = self.encoder(
             pack_padded_sequence(
-                batch_embeddings, input_lengths, batch_first=True, enforce_sorted=False
+                batch_embeddings,
+                input_lengths_cpu,
+                batch_first=True,
+                enforce_sorted=False,
             )
         )
         batch_encoder_hidden_states, _ = pad_packed_sequence(
