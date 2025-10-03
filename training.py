@@ -1,4 +1,5 @@
 import os
+import pickle
 import re
 import shutil
 from collections import defaultdict
@@ -32,7 +33,9 @@ NUM_EPOCHS = 200
 MAX_TOKENS_EACH_BATCH = 8000
 TRAIN_DATASET_LENGTH = None
 VALIDATION_DATASET_LENGTH = None
-CONTINUE_TRAINING = False
+CONTINUE_TRAINING = True
+LAST_TRAIN_STEP_FILE = f"{CHECKPOINT_FOLDER}/last_train_step.pkl"
+TRAIN_STEP_SAVE_INTERVAL = 50
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 LOSS_LOG_MODE = "graph"
 LOSS_LOG_INTERVAL = 10
@@ -191,26 +194,51 @@ if __name__ == "__main__":
 
     checkpoint_file, checkpoint_idx = find_latest_checkpoint()
 
+    def return_default_dict_list():
+        return defaultdict(list)
+
+    epoch_loss_history = defaultdict(return_default_dict_list)
+    batch_loss_history = defaultdict(list)
+    metric_history = defaultdict(list)
+
     if CONTINUE_TRAINING and checkpoint_file is not None:
         load_checkpoint(model, checkpoint_file, map_location=DEVICE)
         print("Model loaded successfully!")
+        with open(LAST_TRAIN_STEP_FILE, "rb") as f:
+            (
+                latest_epoch_idx,
+                latest_batch_idx,
+                epoch_loss_history,
+                batch_loss_history,
+                metric_history,
+                latest_epoch_num_tokens,
+                latest_raw_batch_loss_history,
+            ) = pickle.load(f)
     else:
         clear_checkpoint_folder()
         checkpoint_idx = -1
+        CONTINUE_TRAINING = False
 
-    epoch_loss_history = defaultdict(lambda: defaultdict(list))
-    batch_loss_history = defaultdict(list)
-    metric_history = defaultdict(list)
     save_count = 0
     for epoch in range(NUM_EPOCHS):
+        if CONTINUE_TRAINING and epoch < latest_epoch_idx:
+            continue
         metrics = defaultdict(list)
         for split in ["train", "validation"]:
             batch_step = (
                 model.train_one_batch if split == "train" else model.validate_one_batch
             )
-            epoch_num_tokens = 0
-            raw_batch_loss_history = defaultdict(list)
+            if CONTINUE_TRAINING:
+                epoch_num_tokens = latest_epoch_num_tokens
+                raw_batch_loss_history = latest_raw_batch_loss_history
+            else:
+                epoch_num_tokens = 0
+                raw_batch_loss_history = defaultdict(list)
             for batch_idx, batch in enumerate(loader[split]):
+                if CONTINUE_TRAINING and batch_idx <= latest_batch_idx:
+                    continue
+                else:
+                    CONTINUE_TRAINING = False
                 batch_num_tokens = batch["target_length"].sum().item()
                 epoch_num_tokens += batch_num_tokens
                 match MODEL:
@@ -321,6 +349,21 @@ if __name__ == "__main__":
                         and save_count % CHECKPOINT_INTERVAL == 0
                     ):
                         checkpoint_idx += 1
+
+                if split == "train" and batch_idx % TRAIN_STEP_SAVE_INTERVAL == 0:
+                    with open(LAST_TRAIN_STEP_FILE, "wb") as f:
+                        pickle.dump(
+                            (
+                                epoch,
+                                batch_idx,
+                                epoch_loss_history,
+                                batch_loss_history,
+                                metric_history,
+                                epoch_num_tokens,
+                                raw_batch_loss_history,
+                            ),
+                            f,
+                        )
 
                 torch.cuda.empty_cache()
 
