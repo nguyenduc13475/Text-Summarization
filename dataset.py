@@ -117,7 +117,7 @@ class DynamicBatchSampler(Sampler):
 
             if batch and (
                 new_max_input_length * (len(batch) + 1) > self.max_tokens
-                or new_max_target_length * (len(batch) + 1) > self.max_tokens * 0.2
+                or new_max_target_length * (len(batch) + 1) > self.max_tokens * 0.1
             ):
                 yield batch
                 batch, max_input_length, max_target_length = [], 0, 0
