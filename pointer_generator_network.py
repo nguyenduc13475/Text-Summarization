@@ -211,12 +211,12 @@ class PointerGeneratorNetwork(nn.Module):
                 dim=1
             )
 
-            nll_losses = nll_losses - torch.log(next_token_probs + 1e-9)
+            nll_losses = nll_losses - torch.log(next_token_probs + 1e-9).masked_fill(
+                t >= target_lengths, 0
+            )
             cov_losses = cov_losses + torch.min(
                 attention_distributions, coverage_vectors
-            ).sum(dim=1)
-            nll_losses = nll_losses.masked_fill(t >= target_lengths, 0)
-            cov_losses = cov_losses.masked_fill(t >= target_lengths, 0)
+            ).sum(dim=1).masked_fill(t >= target_lengths, 0)
             coverage_vectors = coverage_vectors + attention_distributions
 
         nll_loss = nll_losses.sum()

@@ -81,9 +81,9 @@ class CNNDailyMailDataset(Dataset):
 
         oov_list = []
         input_ids = text_to_token_ids(self.tokenizer, article, oov_list)
-        target_ids = text_to_token_ids(
-            self.tokenizer, hightlights, oov_list
-        ) + self.tokenizer.token_to_id("</s>")
+        target_ids = text_to_token_ids(self.tokenizer, hightlights, oov_list) + [
+            self.tokenizer.token_to_id("</s>")
+        ]
 
         return {
             "input_ids": torch.tensor(input_ids, dtype=torch.long),
