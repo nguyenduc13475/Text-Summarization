@@ -1,6 +1,5 @@
 import os
 import pickle
-import re
 import shutil
 from collections import defaultdict
 
@@ -11,26 +10,18 @@ from torch.utils.data import DataLoader
 
 from dataset import CNNDailyMailDataset, DynamicBatchSampler, build_collate_fn
 from environment import adaptive_display, detect_runtime_env, try_set_window_position
-from metrics import compute_metric
 from neural_intra_attention_model import NeuralIntraAttentionModel
 from pointer_generator_network import PointerGeneratorNetwork
 from tokenization import PointerGeneratorTokenizer
 from transformer import Transformer
-from utils import (
-    load_checkpoint,
-    name_to_latex,
-    print_log_file,
-    save_checkpoint,
-    set_seed,
-    token_ids_to_text,
-)
+from utils import load_checkpoint, name_to_latex, save_checkpoint, set_seed
 
 set_seed()
 
 MODEL = "POINTER_GENERATOR_NETWORK"
 CHECKPOINT_FOLDER = f"{MODEL.lower()}_checkpoints"
 NUM_EPOCHS = 200
-MAX_TOKENS_EACH_BATCH = 32000
+MAX_TOKENS_EACH_BATCH = 60000
 TRAIN_DATASET_LENGTH = None
 VALIDATION_DATASET_LENGTH = None
 CONTINUE_TRAINING = True
