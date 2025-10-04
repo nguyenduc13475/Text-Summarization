@@ -9,7 +9,7 @@ import torch
 from tokenizers.implementations import ByteLevelBPETokenizer
 from torch.utils.data import DataLoader
 
-from dataset import CNNDailyMailDataset, DynamicBatchSampler, collate_fn
+from dataset import CNNDailyMailDataset, DynamicBatchSampler, build_collate_fn
 from environment import adaptive_display, detect_runtime_env, try_set_window_position
 from metrics import compute_metric
 from neural_intra_attention_model import NeuralIntraAttentionModel
@@ -118,6 +118,7 @@ if __name__ == "__main__":
     else:
         tokenizer = PointerGeneratorTokenizer("word_level_vocab.json")
 
+    collate_fn = build_collate_fn(tokenizer)
     ds = {
         "train": CNNDailyMailDataset(
             split="train",
@@ -245,6 +246,7 @@ if __name__ == "__main__":
                             batch["target_ids"],
                             batch["oov_list"],
                             batch["input_length"],
+                            batch["target_length"],
                         )
                     case "NEURAL_INTRA_ATTENTION_MODEL":
                         losses = batch_step(
@@ -252,6 +254,7 @@ if __name__ == "__main__":
                             batch["target_ids"],
                             batch["oov_list"],
                             batch["input_length"],
+                            batch["target_length"],
                             max_reinforce_length=200,
                             target_texts=batch["target_text"],
                         )

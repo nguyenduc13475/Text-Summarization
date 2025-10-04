@@ -8,7 +8,7 @@ import torch
 from tokenizers.implementations import ByteLevelBPETokenizer
 from torch.utils.data import DataLoader
 
-from dataset import CNNDailyMailDataset, DynamicBatchSampler, collate_fn
+from dataset import CNNDailyMailDataset, DynamicBatchSampler, build_collate_fn
 from environment import adaptive_display, detect_runtime_env, try_set_window_position
 from metrics import compute_metric
 from neural_intra_attention_model import NeuralIntraAttentionModel
@@ -107,7 +107,7 @@ if __name__ == "__main__":
             )
             test_loader = DataLoader(
                 test_ds,
-                collate_fn=collate_fn,
+                collate_fn=build_collate_fn(tokenizer),
                 batch_sampler=(
                     DynamicBatchSampler(
                         test_ds, max_tokens=MAX_TOKENS_EACH_BATCH, shuffle=True

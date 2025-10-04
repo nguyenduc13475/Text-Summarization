@@ -81,7 +81,9 @@ class CNNDailyMailDataset(Dataset):
 
         oov_list = []
         input_ids = text_to_token_ids(self.tokenizer, article, oov_list)
-        target_ids = text_to_token_ids(self.tokenizer, hightlights, oov_list)
+        target_ids = text_to_token_ids(
+            self.tokenizer, hightlights, oov_list
+        ) + self.tokenizer.token_to_id("</s>")
 
         return {
             "input_ids": torch.tensor(input_ids, dtype=torch.long),
@@ -121,22 +123,30 @@ class DynamicBatchSampler(Sampler):
         return len(self.dataset)
 
 
-def collate_fn(batch):
-    batch_input_ids = [sample["input_ids"] for sample in batch]
-    batch_target_ids = [sample["target_ids"] for sample in batch]
+def build_collate_fn(tokenizer):
+    def collate_fn(batch):
+        pad_token = tokenizer.token_to_id("<pad>")
+        batch_input_ids = [sample["input_ids"] for sample in batch]
+        batch_target_ids = [sample["target_ids"] for sample in batch]
 
-    batch_input_ids = pad_sequence(batch_input_ids, batch_first=True, padding_value=0)
-    batch_target_ids = pad_sequence(batch_target_ids, batch_first=True, padding_value=0)
+        batch_input_ids = pad_sequence(
+            batch_input_ids, batch_first=True, padding_value=pad_token
+        )
+        batch_target_ids = pad_sequence(
+            batch_target_ids, batch_first=True, padding_value=pad_token
+        )
 
-    input_lengths = (batch_input_ids != 0).sum(dim=1)
-    target_lengths = (batch_target_ids != 0).sum(dim=1)
+        input_lengths = (batch_input_ids != pad_token).sum(dim=1)
+        target_lengths = (batch_target_ids != pad_token).sum(dim=1)
 
-    return {
-        "input_ids": batch_input_ids,
-        "input_length": input_lengths,
-        "input_text": [sample["input_text"] for sample in batch],
-        "target_ids": batch_target_ids,
-        "target_length": target_lengths,
-        "target_text": [sample["target_text"] for sample in batch],
-        "oov_list": [sample["oov_list"] for sample in batch],
-    }
+        return {
+            "input_ids": batch_input_ids,
+            "input_length": input_lengths,
+            "input_text": [sample["input_text"] for sample in batch],
+            "target_ids": batch_target_ids,
+            "target_length": target_lengths,
+            "target_text": [sample["target_text"] for sample in batch],
+            "oov_list": [sample["oov_list"] for sample in batch],
+        }
+
+    return collate_fn

@@ -208,16 +208,6 @@ class Transformer(nn.Module):
             self.scaler = torch.amp.GradScaler()
         self.loss_scale = 1e-2
 
-    def _safe_ids(self, ids):
-        return torch.where(
-            ids >= self.vocab_size,
-            torch.tensor(self.unknown_token, device=self.device),
-            ids,
-        )
-
-    def _safe_embed(self, ids):
-        return self.embedding_layer(self._safe_ids(ids))
-
     def make_padding_mask(self, batch_input_ids):
         mask = batch_input_ids.eq(self.pad_token)
         return mask.float().masked_fill(mask, float("-inf"))
@@ -228,32 +218,18 @@ class Transformer(nn.Module):
 
         batch_size = batch_input_ids.shape[0]
         max_target_length = batch_target_ids.shape[1]
-        batch_input_ids = self._safe_ids(batch_input_ids)
-        batch_target_ids = self._safe_ids(batch_target_ids)
         batch_current_tokens = torch.cat(
             [
                 torch.full((batch_size, 1), self.start_token, device=self.device),
-                batch_target_ids,
+                batch_target_ids[:, :-1],
             ],
             dim=1,
         )
-        batch_next_tokens = torch.cat(
-            [
-                batch_target_ids,
-                torch.full((batch_size, 1), self.pad_token, device=self.device),
-            ],
-            dim=1,
-        )
-        batch_next_tokens[
-            torch.arange(batch_size, device=self.device),
-            (batch_next_tokens == self.pad_token).int().argmax(dim=1),
-        ] = self.end_token
-
         batch_input_embeddings = self.embedding_layer(batch_input_ids)
         batch_current_token_embeddings = self.embedding_layer(batch_current_tokens)
 
         causal_mask = nn.Transformer.generate_square_subsequent_mask(
-            max_target_length + 1
+            max_target_length
         ).to(self.device)
         input_padding_mask = self.make_padding_mask(batch_input_ids)
         current_token_padding_mask = self.make_padding_mask(batch_current_tokens)
@@ -276,11 +252,11 @@ class Transformer(nn.Module):
         batch_target_distributions = torch.zeros_like(batch_vocab_distributions)
         batch_target_distributions.fill_(smoothing / (self.vocab_size - 1))
         batch_target_distributions.scatter_(
-            2, batch_next_tokens.unsqueeze(2), 1.0 - smoothing
+            2, batch_target_ids.unsqueeze(2), 1.0 - smoothing
         )
 
         batch_target_distributions.masked_fill_(
-            batch_next_tokens.unsqueeze(2) == self.pad_token, 0.0
+            batch_target_ids.unsqueeze(2) == self.pad_token, 0.0
         )
 
         loss = F.kl_div(

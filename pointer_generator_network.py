@@ -107,31 +107,33 @@ class PointerGeneratorNetwork(nn.Module):
         return self.embedding_layer(self._safe_ids(ids))
 
     def compute_loss(
-        self, batch_input_ids, batch_target_ids, oov_lists, input_lengths=None
+        self,
+        batch_input_ids,
+        batch_target_ids,
+        oov_lists,
+        input_lengths,
+        target_lengths,
     ):
         batch_input_ids = batch_input_ids.to(self.device)
         batch_target_ids = batch_target_ids.to(self.device)
-        if input_lengths is not None:
-            input_lengths_cpu = input_lengths
-            input_lengths = input_lengths.to(self.device)
+        target_lengths = target_lengths.to(self.device)
+
+        batch_size, max_input_length = batch_input_ids.shape
+        max_target_length = batch_target_ids.shape[1]
 
         max_num_oovs = 0
         for oov_list in oov_lists:
             if len(oov_list) > max_num_oovs:
                 max_num_oovs = len(oov_list)
 
-        batch_size, max_input_length = batch_input_ids.shape
-        max_target_length = batch_target_ids.shape[1]
-
         batch_embeddings = self._safe_embed(batch_input_ids)
-
         batch_encoder_hidden_states, (
             encoder_final_hidden_states,
             encoder_final_cell_states,
         ) = self.encoder(
             pack_padded_sequence(
                 batch_embeddings,
-                input_lengths_cpu,
+                input_lengths,
                 batch_first=True,
                 enforce_sorted=False,
             )
@@ -213,9 +215,8 @@ class PointerGeneratorNetwork(nn.Module):
             cov_losses = cov_losses + torch.min(
                 attention_distributions, coverage_vectors
             ).sum(dim=1)
-            if input_lengths is not None:
-                nll_losses = nll_losses.masked_fill(input_lengths <= t, 0)
-                cov_losses = cov_losses.masked_fill(input_lengths <= t, 0)
+            nll_losses = nll_losses.masked_fill(t >= target_lengths, 0)
+            cov_losses = cov_losses.masked_fill(t >= target_lengths, 0)
             coverage_vectors = coverage_vectors + attention_distributions
 
         nll_loss = nll_losses.sum()
@@ -225,7 +226,12 @@ class PointerGeneratorNetwork(nn.Module):
         return {"nll_loss": nll_loss, "cov_loss": cov_loss, "total_loss": total_loss}
 
     def train_one_batch(
-        self, batch_input_ids, batch_target_ids, oov_lists, input_lengths=None
+        self,
+        batch_input_ids,
+        batch_target_ids,
+        oov_lists,
+        input_lengths,
+        target_lengths,
     ):
         self.train()
         self.optimizer.zero_grad()
@@ -233,14 +239,22 @@ class PointerGeneratorNetwork(nn.Module):
         if self.device.type == "cuda":
             with torch.amp.autocast(device_type="cuda"):
                 losses = self.compute_loss(
-                    batch_input_ids, batch_target_ids, oov_lists, input_lengths
+                    batch_input_ids,
+                    batch_target_ids,
+                    oov_lists,
+                    input_lengths,
+                    target_lengths,
                 )
             self.scaler.scale(losses["total_loss"] * self.loss_scale).backward()
             self.scaler.step(self.optimizer)
             self.scaler.update()
         else:
             losses = self.compute_loss(
-                batch_input_ids, batch_target_ids, oov_lists, input_lengths
+                batch_input_ids,
+                batch_target_ids,
+                oov_lists,
+                input_lengths,
+                target_lengths,
             )
             (losses["total_loss"] * self.loss_scale).backward()
             self.optimizer.step()
@@ -248,20 +262,29 @@ class PointerGeneratorNetwork(nn.Module):
         return tensor_dict_to_scalar(losses)
 
     def validate_one_batch(
-        self, batch_input_ids, batch_target_ids, oov_lists, input_lengths=None
+        self,
+        batch_input_ids,
+        batch_target_ids,
+        oov_lists,
+        input_lengths,
+        target_lengths,
     ):
         self.eval()
         with torch.no_grad():
             losses = self.compute_loss(
-                batch_input_ids, batch_target_ids, oov_lists, input_lengths
+                batch_input_ids,
+                batch_target_ids,
+                oov_lists,
+                input_lengths,
+                target_lengths,
             )
             return tensor_dict_to_scalar(losses)
 
     def infer(
         self,
         batch_input_ids,
-        max_output_length=100,
-        beam_width=4,
+        max_output_length=200,
+        beam_width=3,
         return_attention=False,
         return_embedding=False,
     ):

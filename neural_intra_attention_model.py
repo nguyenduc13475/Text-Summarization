@@ -110,23 +110,22 @@ class NeuralIntraAttentionModel(nn.Module):
         batch_input_ids,
         batch_target_ids,
         oov_lists,
-        input_lengths=None,
+        input_lengths,
+        target_lengths,
         max_reinforce_length=100,
         target_texts=None,
     ):
         batch_input_ids = batch_input_ids.to(self.device)
         batch_target_ids = batch_target_ids.to(self.device)
-        if input_lengths is not None:
-            input_lengths_cpu = input_lengths
-            input_lengths = input_lengths.to(self.device)
+        target_lengths = target_lengths.to(self.device)
+        batch_size, max_input_length = batch_input_ids.shape
+        max_target_length = batch_target_ids.shape[1]
 
         max_num_oovs = 0
         for oov_list in oov_lists:
             if len(oov_list) > max_num_oovs:
                 max_num_oovs = len(oov_list)
 
-        batch_size, max_input_length = batch_input_ids.shape
-        max_target_length = batch_target_ids.shape[1]
         out_proj = F.tanh(
             self.embedding_layer.weight[self.end_token :] @ self.vocab_proj
         )
@@ -139,7 +138,7 @@ class NeuralIntraAttentionModel(nn.Module):
         ) = self.encoder(
             pack_padded_sequence(
                 batch_embeddings,
-                input_lengths_cpu,
+                input_lengths,
                 batch_first=True,
                 enforce_sorted=False,
             )
@@ -283,10 +282,8 @@ class NeuralIntraAttentionModel(nn.Module):
                     )
 
                     nll_losses = nll_losses - (
-                        torch.log(next_token_probs + 1e-9)
-                        if input_lengths is None
-                        else torch.log(next_token_probs + 1e-9).masked_fill(
-                            input_lengths <= t, 0
+                        torch.log(next_token_probs + 1e-9).masked_fill(
+                            t >= target_lengths, 0
                         )
                     )
 
@@ -419,7 +416,8 @@ class NeuralIntraAttentionModel(nn.Module):
         batch_input_ids,
         batch_target_ids,
         oov_lists,
-        input_lengths=None,
+        input_lengths,
+        target_lengths,
         max_reinforce_length=100,
         target_texts=None,
     ):
@@ -433,6 +431,7 @@ class NeuralIntraAttentionModel(nn.Module):
                     batch_target_ids,
                     oov_lists,
                     input_lengths,
+                    target_lengths,
                     max_reinforce_length,
                     target_texts,
                 )
@@ -458,7 +457,8 @@ class NeuralIntraAttentionModel(nn.Module):
         batch_input_ids,
         batch_target_ids,
         oov_lists,
-        input_lengths=None,
+        input_lengths,
+        target_lengths,
         max_reinforce_length=100,
         target_texts=None,
     ):
@@ -469,6 +469,7 @@ class NeuralIntraAttentionModel(nn.Module):
                 batch_target_ids,
                 oov_lists,
                 input_lengths,
+                target_lengths,
                 max_reinforce_length,
                 target_texts,
             )
