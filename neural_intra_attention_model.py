@@ -42,11 +42,11 @@ class NeuralIntraAttentionModel(nn.Module):
     def __init__(
         self,
         tokenizer,
-        embedding_dim=256,
+        embedding_dim=128,
         hidden_dim=256,
-        num_layers=3,
+        num_layers=2,
         rl_loss_factor=0.75,
-        learning_rate=1e-3,
+        learning_rate=1e-2,
         device="cpu",
     ):
         super().__init__()
@@ -59,14 +59,14 @@ class NeuralIntraAttentionModel(nn.Module):
             batch_first=True,
             bidirectional=True,
             num_layers=num_layers,
-            dropout=0.2,
+            dropout=0.3,
         )
         self.decoder = nn.LSTM(
             embedding_dim,
             hidden_dim * 2,
             batch_first=True,
             num_layers=num_layers,
-            dropout=0.2,
+            dropout=0.3,
         )
         self.encoder_attn_proj = nn.Parameter(
             torch.randn(hidden_dim * 2, hidden_dim * 2)
@@ -436,6 +436,8 @@ class NeuralIntraAttentionModel(nn.Module):
                     target_texts,
                 )
             self.scaler.scale(losses["total_loss"] * self.loss_scale).backward()
+            self.scaler.unscale_(self.optimizer)
+            torch.nn.utils.clip_grad_norm_(self.parameters(), max_norm=2.0)
             self.scaler.step(self.optimizer)
             self.scaler.update()
         else:
@@ -448,6 +450,7 @@ class NeuralIntraAttentionModel(nn.Module):
                 target_texts,
             )
             (losses["total_loss"] * self.loss_scale).backward()
+            torch.nn.utils.clip_grad_norm_(self.parameters(), max_norm=2.0)
             self.optimizer.step()
 
         return tensor_dict_to_scalar(losses)

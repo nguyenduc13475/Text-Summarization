@@ -195,7 +195,7 @@ class Transformer(nn.Module):
 
         self.embedding_layer = EmbeddingLayer(self.vocab_size, d_model)
         self.transformer = SimpleTransformer(
-            d_model=d_model, nhead=nhead, num_layers=num_layers, dropout=0.2
+            d_model=d_model, nhead=nhead, num_layers=num_layers, dropout=0.3
         )
         self.out_proj = nn.Linear(d_model, self.vocab_size - self.end_token)
         self.device = torch.device(device)
@@ -275,11 +275,14 @@ class Transformer(nn.Module):
             with torch.amp.autocast(device_type="cuda"):
                 losses = self.compute_loss(batch_input_ids, batch_target_ids)
             self.scaler.scale(losses["total_loss"] * self.loss_scale).backward()
+            self.scaler.unscale_(self.optimizer)
+            torch.nn.utils.clip_grad_norm_(self.parameters(), max_norm=2.0)
             self.scaler.step(self.optimizer)
             self.scaler.update()
         else:
             losses = self.compute_loss(batch_input_ids, batch_target_ids)
             (losses["total_loss"] * self.loss_scale).backward()
+            torch.nn.utils.clip_grad_norm_(self.parameters(), max_norm=2.0)
             self.optimizer.step()
 
         return tensor_dict_to_scalar(losses)

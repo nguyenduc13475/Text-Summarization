@@ -22,7 +22,7 @@ Ngoài ra, nhóm cũng cài đặt **TextRank** để tham khảo.
 ## 📂 Tokenizer sử dụng
 
 - **Pointer Generator Network** và **Neural Intra Attention Model**:  
-  Sử dụng **Word-level tokenizer** với từ vựng trong file `word_level_vocab.json` (25,000 token).
+  Sử dụng **Word-level tokenizer** với từ vựng trong file `word_level_vocab.json` (50,000 token).
 - **Transformer**:  
   Sử dụng **ByteLevelBPETokenizer** với file `merges.txt` và `vocab.json` (50,000 token).
 
@@ -30,10 +30,10 @@ Ngoài ra, nhóm cũng cài đặt **TextRank** để tham khảo.
 
 ## 📊 Dataset
 
-Nhóm sử dụng **CNN/Daily Mail Dataset**. Do kích thước tương đối lớn, nhóm chỉ sử dụng một phần nhỏ của dataset này, gồm:
-- **Train**: 10,000 sample ngẫu nhiên trong tổng cộng 287,113 sample gốc
-- **Validation**: 1,250 sample ngẫu nhiên trong 13,368 sample gốc
-- **Test**: 1,250 sample ngẫu nhiên trong 11,490 sample gốc
+Nhóm sử dụng **CNN/Daily Mail Dataset**, gồm:
+- **Train**: 287,113 samples
+- **Validation**: 13,368 samples
+- **Test**: 11,490 samples
 
 Mỗi sample có cấu trúc:
 ```json

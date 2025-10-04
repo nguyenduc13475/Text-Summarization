@@ -35,14 +35,14 @@ class PointerGeneratorNetwork(nn.Module):
     def __init__(
         self,
         tokenizer,
-        embedding_dim=256,
+        embedding_dim=128,
         encoder_hidden_dim=256,
         decoder_hidden_dim=256,
         attention_dim=256,
-        bottle_neck_dim=256,
-        num_layers=3,
+        bottle_neck_dim=512,
+        num_layers=2,
         cov_loss_factor=1.0,
-        learning_rate=1e-3,
+        learning_rate=1e-2,
         device="cpu",
     ):
         super().__init__()
@@ -55,7 +55,7 @@ class PointerGeneratorNetwork(nn.Module):
             batch_first=True,
             bidirectional=True,
             num_layers=num_layers,
-            dropout=0.2,
+            dropout=0.3,
         )
         self.enc_to_dec_hidden = nn.Linear(encoder_hidden_dim * 2, decoder_hidden_dim)
         self.enc_to_dec_cell = nn.Linear(encoder_hidden_dim * 2, decoder_hidden_dim)
@@ -64,7 +64,7 @@ class PointerGeneratorNetwork(nn.Module):
             decoder_hidden_dim,
             batch_first=True,
             num_layers=num_layers,
-            dropout=0.2,
+            dropout=0.3,
         )
         self.enc_hidden_to_attn = nn.Linear(encoder_hidden_dim * 2, attention_dim)
         self.dec_hidden_to_attn = nn.Linear(
@@ -75,7 +75,7 @@ class PointerGeneratorNetwork(nn.Module):
         self.vocab_proj_1 = nn.Linear(
             decoder_hidden_dim + encoder_hidden_dim * 2, bottle_neck_dim
         )
-        self.bottle_neck_activation = nn.Tanh()
+        self.bottle_neck_activation = nn.ReLU()
         self.context_to_switch = nn.Linear(encoder_hidden_dim * 2, 1)
         self.dec_hidden_to_switch = nn.Linear(decoder_hidden_dim, 1, bias=False)
         self.embedding_to_switch = nn.Linear(embedding_dim, 1, bias=False)
@@ -246,6 +246,8 @@ class PointerGeneratorNetwork(nn.Module):
                     target_lengths,
                 )
             self.scaler.scale(losses["total_loss"] * self.loss_scale).backward()
+            self.scaler.unscale_(self.optimizer)
+            torch.nn.utils.clip_grad_norm_(self.parameters(), max_norm=2.0)
             self.scaler.step(self.optimizer)
             self.scaler.update()
         else:
@@ -257,6 +259,7 @@ class PointerGeneratorNetwork(nn.Module):
                 target_lengths,
             )
             (losses["total_loss"] * self.loss_scale).backward()
+            torch.nn.utils.clip_grad_norm_(self.parameters(), max_norm=2.0)
             self.optimizer.step()
 
         return tensor_dict_to_scalar(losses)

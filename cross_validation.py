@@ -79,24 +79,24 @@ if __name__ == "__main__":
             case "POINTER_GENERATOR_NETWORK":
                 model = PointerGeneratorNetwork(
                     tokenizer=tokenizer,
-                    embedding_dim=256,
+                    embedding_dim=128,
                     encoder_hidden_dim=256,
                     decoder_hidden_dim=256,
                     attention_dim=256,
-                    bottle_neck_dim=256,
-                    num_layers=3,
+                    bottle_neck_dim=512,
+                    num_layers=2,
                     cov_loss_factor=1.0,
-                    learning_rate=1e-3,
+                    learning_rate=1e-2,
                     device=DEVICE,
                 )
             case "NEURAL_INTRA_ATTENTION_MODEL":
                 model = NeuralIntraAttentionModel(
                     tokenizer=tokenizer,
-                    embedding_dim=256,
+                    embedding_dim=128,
                     hidden_dim=256,
-                    num_layers=3,
+                    num_layers=2,
                     rl_loss_factor=0.75,
-                    learning_rate=1e-3,
+                    learning_rate=1e-2,
                     device=DEVICE,
                 )
             case "TRANSFORMER":
@@ -120,9 +120,7 @@ if __name__ == "__main__":
             loader = DataLoader(
                 ds,
                 collate_fn=collate_fn,
-                batch_sampler=DynamicBatchSampler(
-                    ds, max_tokens=MAX_TOKENS_EACH_BATCH, shuffle=True
-                ),
+                batch_sampler=DynamicBatchSampler(ds, max_tokens=MAX_TOKENS_EACH_BATCH),
                 pin_memory=True if DEVICE == "cuda" else False,
             )
 

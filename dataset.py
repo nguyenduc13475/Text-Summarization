@@ -66,6 +66,14 @@ class CNNDailyMailDataset(Dataset):
         else:
             self.ds = full_ds
 
+        self.indices, self.lengths = zip(
+            *sorted(
+                enumerate([len(sample["article"]) for sample in self.ds]),
+                key=lambda x: x[1],
+                reverse=True,
+            )
+        )
+
     def __len__(self):
         return len(self.ds)
 
@@ -95,18 +103,13 @@ class CNNDailyMailDataset(Dataset):
 
 
 class DynamicBatchSampler(Sampler):
-    def __init__(self, dataset, max_tokens=10000, shuffle=True):
+    def __init__(self, dataset, max_tokens=10000):
         self.dataset = dataset
         self.max_tokens = max_tokens
-        self.shuffle = shuffle
 
     def __iter__(self):
-        indices = list(range(len(self.dataset)))
-        if self.shuffle:
-            random.shuffle(indices)
-
         batch, max_input_length = [], 0
-        for idx in indices:
+        for idx in self.dataset.indices:
             input_length = len(self.dataset[idx]["input_ids"])
             new_max_input_length = max(max_input_length, input_length)
 
@@ -115,7 +118,8 @@ class DynamicBatchSampler(Sampler):
                 batch, max_input_length = [], 0
 
             batch.append(idx)
-            max_input_length = max(max_input_length, input_length)
+            max_input_length = new_max_input_length
+
         if batch:
             yield batch
 

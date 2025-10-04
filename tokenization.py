@@ -25,7 +25,10 @@ class PointerGeneratorTokenizer:
         else:
             counter = Counter()
             ds = load_dataset("abisee/cnn_dailymail", "3.0.0")["train"]
-            for sample in ds:
+            print("Building tokenizer...")
+            for i, sample in enumerate(ds):
+                if i % 1000 == 0:
+                    print(f"{i + 1}/{len(ds)} samples")
                 text = sample["article"] + " " + sample["highlights"]
                 words = re.findall(r"\w+|[^\w\s]", text.lower())
                 counter.update(words)
@@ -37,7 +40,7 @@ class PointerGeneratorTokenizer:
                 "<CAP>": 4,
                 "<ALLCAP>": 5,
             }
-            for word, _ in counter.most_common(25000 - len(self.vocab)):
+            for word, _ in counter.most_common(50000 - len(self.vocab)):
                 self.vocab[word] = len(self.vocab)
 
             with open("word_level_vocab.json", "w", encoding="utf-8") as f:
