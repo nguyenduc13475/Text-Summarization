@@ -108,17 +108,23 @@ class DynamicBatchSampler(Sampler):
         self.max_tokens = max_tokens
 
     def __iter__(self):
-        batch, max_input_length = [], 0
+        batch, max_input_length, max_target_length = [], 0, 0
         for idx in self.dataset.indices:
             input_length = len(self.dataset[idx]["input_ids"])
+            target_length = len(self.dataset[idx]["target_ids"])
             new_max_input_length = max(max_input_length, input_length)
+            new_max_target_length = max(max_target_length, target_length)
 
-            if batch and new_max_input_length * (len(batch) + 1) > self.max_tokens:
+            if batch and (
+                new_max_input_length * (len(batch) + 1) > self.max_tokens
+                or new_max_target_length * (len(batch) + 1) > self.max_tokens * 0.2
+            ):
                 yield batch
-                batch, max_input_length = [], 0
+                batch, max_input_length, max_target_length = [], 0, 0
 
             batch.append(idx)
             max_input_length = new_max_input_length
+            max_target_length = new_max_target_length
 
         if batch:
             yield batch
