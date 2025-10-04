@@ -42,9 +42,9 @@ class NeuralIntraAttentionModel(nn.Module):
     def __init__(
         self,
         tokenizer,
-        embedding_dim=512,
-        hidden_dim=512,
-        num_layers=6,
+        embedding_dim=256,
+        hidden_dim=256,
+        num_layers=3,
         rl_loss_factor=0.75,
         learning_rate=1e-3,
         device="cpu",
@@ -59,9 +59,14 @@ class NeuralIntraAttentionModel(nn.Module):
             batch_first=True,
             bidirectional=True,
             num_layers=num_layers,
+            dropout=0.2,
         )
         self.decoder = nn.LSTM(
-            embedding_dim, hidden_dim * 2, batch_first=True, num_layers=num_layers
+            embedding_dim,
+            hidden_dim * 2,
+            batch_first=True,
+            num_layers=num_layers,
+            dropout=0.2,
         )
         self.encoder_attn_proj = nn.Parameter(
             torch.randn(hidden_dim * 2, hidden_dim * 2)
@@ -82,7 +87,9 @@ class NeuralIntraAttentionModel(nn.Module):
         self.device = torch.device(device)
 
         self.to(device)
-        self.optimizer = optim.Adam(self.parameters(), lr=learning_rate)
+        self.optimizer = optim.Adam(
+            self.parameters(), lr=learning_rate, weight_decay=1e-5
+        )
         if self.device.type == "cuda":
             self.scaler = torch.amp.GradScaler()
         self.rl_loss_factor = rl_loss_factor

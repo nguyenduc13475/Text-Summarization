@@ -35,12 +35,12 @@ class PointerGeneratorNetwork(nn.Module):
     def __init__(
         self,
         tokenizer,
-        embedding_dim=512,
-        encoder_hidden_dim=512,
-        decoder_hidden_dim=512,
-        attention_dim=512,
-        bottle_neck_dim=512,
-        num_layers=6,
+        embedding_dim=256,
+        encoder_hidden_dim=256,
+        decoder_hidden_dim=256,
+        attention_dim=256,
+        bottle_neck_dim=256,
+        num_layers=3,
         cov_loss_factor=1.0,
         learning_rate=1e-3,
         device="cpu",
@@ -55,11 +55,16 @@ class PointerGeneratorNetwork(nn.Module):
             batch_first=True,
             bidirectional=True,
             num_layers=num_layers,
+            dropout=0.2,
         )
         self.enc_to_dec_hidden = nn.Linear(encoder_hidden_dim * 2, decoder_hidden_dim)
         self.enc_to_dec_cell = nn.Linear(encoder_hidden_dim * 2, decoder_hidden_dim)
         self.decoder = nn.LSTM(
-            embedding_dim, decoder_hidden_dim, batch_first=True, num_layers=num_layers
+            embedding_dim,
+            decoder_hidden_dim,
+            batch_first=True,
+            num_layers=num_layers,
+            dropout=0.2,
         )
         self.enc_hidden_to_attn = nn.Linear(encoder_hidden_dim * 2, attention_dim)
         self.dec_hidden_to_attn = nn.Linear(
@@ -83,7 +88,9 @@ class PointerGeneratorNetwork(nn.Module):
         self.device = torch.device(device)
         self.apply(init_weights)
         self.to(device)
-        self.optimizer = optim.Adam(self.parameters(), lr=learning_rate)
+        self.optimizer = optim.Adam(
+            self.parameters(), lr=learning_rate, weight_decay=1e-5
+        )
         if self.device.type == "cuda":
             self.scaler = torch.amp.GradScaler()
         self.cov_loss_factor = cov_loss_factor

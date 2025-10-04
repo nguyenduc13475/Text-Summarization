@@ -179,9 +179,9 @@ class Transformer(nn.Module):
     def __init__(
         self,
         tokenizer,
-        d_model=512,
+        d_model=256,
         nhead=8,
-        num_layers=6,
+        num_layers=3,
         learning_rate=1e-3,
         device="cpu",
     ):
@@ -195,15 +195,15 @@ class Transformer(nn.Module):
 
         self.embedding_layer = EmbeddingLayer(self.vocab_size, d_model)
         self.transformer = SimpleTransformer(
-            d_model=d_model,
-            nhead=nhead,
-            num_layers=num_layers,
+            d_model=d_model, nhead=nhead, num_layers=num_layers, dropout=0.2
         )
         self.out_proj = nn.Linear(d_model, self.vocab_size - self.end_token)
         self.device = torch.device(device)
 
         self.to(device)
-        self.optimizer = optim.Adam(self.parameters(), lr=learning_rate)
+        self.optimizer = optim.Adam(
+            self.parameters(), lr=learning_rate, weight_decay=1e-5
+        )
         if self.device.type == "cuda":
             self.scaler = torch.amp.GradScaler()
         self.loss_scale = 1e-2

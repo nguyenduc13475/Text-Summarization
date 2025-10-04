@@ -29,7 +29,7 @@ MODELS = [
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 METRICS = ["rouge1", "rouge2", "rougeL", "bleu4", "meteor", "bertscore", "moverscore"]
 MAX_TOKENS_EACH_BATCH = 10000
-DATASET_LENGTH = 1500
+DATASET_LENGTH = 1250
 ENV = detect_runtime_env()
 if ENV in ("colab", "notebook"):
     from IPython.display import display
@@ -64,12 +64,12 @@ if __name__ == "__main__":
                 tokenizer = PointerGeneratorTokenizer("word_level_vocab.json")
                 model = PointerGeneratorNetwork(
                     tokenizer=tokenizer,
-                    embedding_dim=512,
-                    encoder_hidden_dim=512,
-                    decoder_hidden_dim=512,
-                    attention_dim=512,
-                    bottle_neck_dim=512,
-                    num_layers=6,
+                    embedding_dim=256,
+                    encoder_hidden_dim=256,
+                    decoder_hidden_dim=256,
+                    attention_dim=256,
+                    bottle_neck_dim=256,
+                    num_layers=3,
                     cov_loss_factor=1.0,
                     learning_rate=1e-3,
                     device=DEVICE,
@@ -78,9 +78,9 @@ if __name__ == "__main__":
                 tokenizer = PointerGeneratorTokenizer("word_level_vocab.json")
                 model = NeuralIntraAttentionModel(
                     tokenizer=tokenizer,
-                    embedding_dim=512,
-                    hidden_dim=512,
-                    num_layers=6,
+                    embedding_dim=256,
+                    hidden_dim=256,
+                    num_layers=3,
                     rl_loss_factor=0.75,
                     learning_rate=1e-3,
                     device=DEVICE,
@@ -89,9 +89,9 @@ if __name__ == "__main__":
                 tokenizer = ByteLevelBPETokenizer("vocab.json", "merges.txt")
                 model = Transformer(
                     tokenizer=tokenizer,
-                    d_model=512,
+                    d_model=256,
                     nhead=8,
-                    num_layers=6,
+                    num_layers=3,
                     learning_rate=1e-3,
                     device=DEVICE,
                 )
