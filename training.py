@@ -281,11 +281,9 @@ if __name__ == "__main__":
                         )
 
                     if ENV == "colab" and os.path.exists("/content/drive/MyDrive"):
-                        save_checkpoint(
-                            model, f"/content/drive/MyDrive/{TEMP_MODEL_FILE}"
-                        )
+                        save_checkpoint(model, f"/content/drive/MyDrive/temp_model.pt")
                         with open(
-                            f"/content/drive/MyDrive/{LAST_TRAIN_STEP_FILE}", "wb"
+                            f"/content/drive/MyDrive/last_train_step.pkl", "wb"
                         ) as f:
                             pickle.dump(
                                 (
