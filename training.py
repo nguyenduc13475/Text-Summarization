@@ -123,7 +123,7 @@ if __name__ == "__main__":
                 bottle_neck_dim=512,
                 num_layers=2,
                 cov_loss_factor=1.0,
-                learning_rate=1e-2,
+                learning_rate=1e-3,
                 device=DEVICE,
             )
         case "NEURAL_INTRA_ATTENTION_MODEL":
