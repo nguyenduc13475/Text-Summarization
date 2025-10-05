@@ -3,9 +3,13 @@ from collections import defaultdict
 import matplotlib.pyplot as plt
 import torch
 from tokenizers.implementations import ByteLevelBPETokenizer
-from torch.utils.data import DataLoader
 
-from dataset import CNNDailyMailDataset, DynamicBatchSampler, build_collate_fn
+from dataset import (
+    CNNDailyMailDataset,
+    DataLoader,
+    DynamicBatchSampler,
+    build_collate_fn,
+)
 from environment import adaptive_display, detect_runtime_env, try_set_window_position
 from metrics import compute_metric
 from neural_intra_attention_model import NeuralIntraAttentionModel

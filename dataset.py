@@ -166,3 +166,38 @@ def build_collate_fn(tokenizer):
         }
 
     return collate_fn
+
+
+class DataLoader:
+    def __init__(
+        self,
+        dataset: Dataset,
+        batch_sampler,
+        collate_fn=None,
+        skip_batches=0,
+    ):
+        self.dataset = dataset
+        self.batch_sampler = batch_sampler
+        self.collate_fn = collate_fn or (lambda x: x)
+        self.skip_batches = skip_batches
+
+    def __iter__(self):
+        self.batch_iter = iter(self.batch_sampler)
+
+        for _ in range(self.skip_batches):
+            try:
+                next(self.batch_iter)
+            except StopIteration:
+                break
+
+        return self
+
+    def __next__(self):
+        batch_indices = next(self.batch_iter)
+        batch_samples = [self.dataset[idx] for idx in batch_indices]
+        batch = self.collate_fn(batch_samples)
+
+        return batch
+
+    def __len__(self):
+        return len(self.batch_sampler)

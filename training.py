@@ -6,9 +6,13 @@ from collections import defaultdict
 import matplotlib.pyplot as plt
 import torch
 from tokenizers.implementations import ByteLevelBPETokenizer
-from torch.utils.data import DataLoader
 
-from dataset import CNNDailyMailDataset, DynamicBatchSampler, build_collate_fn
+from dataset import (
+    CNNDailyMailDataset,
+    DataLoader,
+    DynamicBatchSampler,
+    build_collate_fn,
+)
 from environment import adaptive_display, detect_runtime_env, try_set_window_position
 from neural_intra_attention_model import NeuralIntraAttentionModel
 from pointer_generator_network import PointerGeneratorNetwork
@@ -99,7 +103,6 @@ if __name__ == "__main__":
                 ds["train"],
                 max_tokens=MAX_TOKENS_EACH_BATCH,
             ),
-            pin_memory=True if DEVICE == "cuda" else False,
         ),
         "validation": DataLoader(
             ds["validation"],
@@ -108,7 +111,6 @@ if __name__ == "__main__":
                 ds["validation"],
                 max_tokens=MAX_TOKENS_EACH_BATCH,
             ),
-            pin_memory=True if DEVICE == "cuda" else False,
         ),
     }
 
@@ -180,15 +182,16 @@ if __name__ == "__main__":
                 epoch_num_tokens = latest_epoch_num_tokens
                 num_samples = latest_num_samples
                 raw_batch_loss_history = latest_raw_batch_loss_history
+                loader[split].skip_batches = latest_batch_idx + 1
+                CONTINUE_TRAINING = False
             else:
                 epoch_num_tokens = 0
                 raw_batch_loss_history = defaultdict(list)
                 num_samples = 0
+                loader[split].skip_batches = 0
+                latest_batch_idx = -1
             for batch_idx, batch in enumerate(loader[split]):
-                if CONTINUE_TRAINING and batch_idx <= latest_batch_idx:
-                    continue
-                else:
-                    CONTINUE_TRAINING = False
+                batch_idx = batch_idx + latest_batch_idx + 1
                 batch_num_tokens = batch["target_length"].sum().item()
                 epoch_num_tokens += batch_num_tokens
                 num_samples += len(batch["input_ids"])
@@ -341,7 +344,7 @@ if __name__ == "__main__":
 
             if split == "train":
                 save_checkpoint(model, f"{CHECKPOINT_FOLDER}/checkpoint_{epoch}.pt")
-                if ENV == "colab" and os.path.exist("/content/drive/MyDrive"):
+                if ENV == "colab" and os.path.exists("/content/drive/MyDrive"):
                     save_checkpoint(
                         model, f"/content/drive/MyDrive/checkpoint_{epoch}.pt"
                     )
