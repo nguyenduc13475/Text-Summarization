@@ -163,6 +163,7 @@ if __name__ == "__main__":
                 batch_loss_history,
                 latest_epoch_num_tokens,
                 latest_raw_batch_loss_history,
+                latest_num_samples,
             ) = pickle.load(f)
     else:
         clear_checkpoint_folder()
@@ -177,11 +178,12 @@ if __name__ == "__main__":
             )
             if CONTINUE_TRAINING:
                 epoch_num_tokens = latest_epoch_num_tokens
+                num_samples = latest_num_samples
                 raw_batch_loss_history = latest_raw_batch_loss_history
             else:
                 epoch_num_tokens = 0
                 raw_batch_loss_history = defaultdict(list)
-            num_samples = 0
+                num_samples = 0
             for batch_idx, batch in enumerate(loader[split]):
                 if CONTINUE_TRAINING and batch_idx <= latest_batch_idx:
                     continue
@@ -268,6 +270,7 @@ if __name__ == "__main__":
                                 batch_loss_history,
                                 epoch_num_tokens,
                                 raw_batch_loss_history,
+                                num_samples,
                             ),
                             f,
                         )
@@ -285,6 +288,7 @@ if __name__ == "__main__":
                                     batch_loss_history,
                                     epoch_num_tokens,
                                     raw_batch_loss_history,
+                                    num_samples,
                                 ),
                                 f,
                             )
