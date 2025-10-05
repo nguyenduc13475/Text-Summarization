@@ -54,7 +54,7 @@ import torch
 from tokenizers.implementations import ByteLevelBPETokenizer
 from torch.utils.data import DataLoader
 
-from dataset import CNNDailyMailDataset, DynamicBatchSampler, collate_fn
+from dataset import CNNDailyMailDataset, DynamicBatchSampler, build_collate_fn
 from environment import adaptive_display, detect_runtime_env, try_set_window_position
 from metrics import compute_metric
 from neural_intra_attention_model import NeuralIntraAttentionModel
@@ -75,9 +75,9 @@ set_seed()
 MODEL = "POINTER_GENERATOR_NETWORK"
 CHECKPOINT_FOLDER = f"{MODEL.lower()}_checkpoints"
 NUM_EPOCHS = 200
-MAX_TOKENS_EACH_BATCH = 30000
-TRAIN_DATASET_LENGTH = 10000
-VALIDATION_DATASET_LENGTH = 1500
+MAX_TOKENS_EACH_BATCH = 60000
+TRAIN_DATASET_LENGTH = None
+VALIDATION_DATASET_LENGTH = None
 CONTINUE_TRAINING = True
 LAST_TRAIN_STEP_FILE = f"{CHECKPOINT_FOLDER}/last_train_step.pkl"
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
@@ -147,21 +147,19 @@ if __name__ == "__main__":
     loader = {
         "train": DataLoader(
             ds["train"],
-            collate_fn=collate_fn,
+            collate_fn=build_collate_fn(tokenizer),
             batch_sampler=DynamicBatchSampler(
                 ds["train"],
                 max_tokens=MAX_TOKENS_EACH_BATCH,
-                shuffle=True,
             ),
             pin_memory=True if DEVICE == "cuda" else False,
         ),
         "validation": DataLoader(
             ds["validation"],
-            collate_fn=collate_fn,
+            collate_fn=build_collate_fn(tokenizer),
             batch_sampler=DynamicBatchSampler(
                 ds["validation"],
                 max_tokens=MAX_TOKENS_EACH_BATCH,
-                shuffle=True,
             ),
             pin_memory=True if DEVICE == "cuda" else False,
         ),
@@ -169,6 +167,6 @@ if __name__ == "__main__":
 
     for epoch in range(NUM_EPOCHS):
         for batch_idx, batch in enumerate(loader["train"]):
-            if batch_idx % 100 == 0:
-                print(batch_idx)
-            continue
+            print(
+                f"{batch["input_ids"].shape[1]} | {batch["target_ids"].shape[1]} | {batch["input_ids"].shape[0]}"
+            )

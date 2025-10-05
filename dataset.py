@@ -108,23 +108,29 @@ class DynamicBatchSampler(Sampler):
         self.max_tokens = max_tokens
 
     def __iter__(self):
-        batch, max_input_length, max_target_length = [], 0, 0
+        batch = []
+        max_input_length = 0
+        max_target_length = 0
+
         for idx in self.dataset.indices:
             input_length = len(self.dataset[idx]["input_ids"])
             target_length = len(self.dataset[idx]["target_ids"])
-            new_max_input_length = max(max_input_length, input_length)
-            new_max_target_length = max(max_target_length, target_length)
+
+            proj_max_input = max(max_input_length, input_length)
+            proj_max_target = max(max_target_length, target_length)
 
             if batch and (
-                new_max_input_length * (len(batch) + 1) > self.max_tokens
-                or new_max_target_length * (len(batch) + 1) > self.max_tokens * 0.1
+                proj_max_input * (len(batch) + 1) > self.max_tokens
+                or proj_max_target * (len(batch) + 1) > self.max_tokens * 0.1
             ):
                 yield batch
-                batch, max_input_length, max_target_length = [], 0, 0
+                batch = []
+                max_input_length = 0
+                max_target_length = 0
 
             batch.append(idx)
-            max_input_length = new_max_input_length
-            max_target_length = new_max_target_length
+            max_input_length = max(max_input_length, input_length)
+            max_target_length = max(max_target_length, target_length)
 
         if batch:
             yield batch
