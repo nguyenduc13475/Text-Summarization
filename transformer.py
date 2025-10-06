@@ -276,13 +276,11 @@ class Transformer(nn.Module):
                 losses = self.compute_loss(batch_input_ids, batch_target_ids)
             self.scaler.scale(losses["total_loss"] * self.loss_scale).backward()
             self.scaler.unscale_(self.optimizer)
-            torch.nn.utils.clip_grad_norm_(self.parameters(), max_norm=2.0)
             self.scaler.step(self.optimizer)
             self.scaler.update()
         else:
             losses = self.compute_loss(batch_input_ids, batch_target_ids)
             (losses["total_loss"] * self.loss_scale).backward()
-            torch.nn.utils.clip_grad_norm_(self.parameters(), max_norm=2.0)
             self.optimizer.step()
 
         return tensor_dict_to_scalar(losses)

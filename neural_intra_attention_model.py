@@ -437,7 +437,6 @@ class NeuralIntraAttentionModel(nn.Module):
                 )
             self.scaler.scale(losses["total_loss"] * self.loss_scale).backward()
             self.scaler.unscale_(self.optimizer)
-            torch.nn.utils.clip_grad_norm_(self.parameters(), max_norm=2.0)
             self.scaler.step(self.optimizer)
             self.scaler.update()
         else:
@@ -450,7 +449,6 @@ class NeuralIntraAttentionModel(nn.Module):
                 target_texts,
             )
             (losses["total_loss"] * self.loss_scale).backward()
-            torch.nn.utils.clip_grad_norm_(self.parameters(), max_norm=2.0)
             self.optimizer.step()
 
         return tensor_dict_to_scalar(losses)
