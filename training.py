@@ -310,7 +310,7 @@ if __name__ == "__main__":
                     sum(loss_values) / epoch_num_tokens
                 )
 
-            log = f"Epoch {epoch} / {split.capitalize()} : Average Loss Per Token is {epoch_loss_history[split]["total_loss"][-1]}"
+            log = f"Epoch {epoch} / {split.capitalize()} : Average Loss Per Token is {epoch_loss_history[split]['total_loss'][-1]}"
 
             match LOSS_LOG_MODE:
                 case "console":
