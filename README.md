@@ -86,7 +86,13 @@ python cross_validation.py
 ```
 > Các tham số có thể chỉnh trong file `cross_validation.py`.
 
-### 6. Chạy TextRank
+### 6. Đánh giá Metric từng Checkpoint
+```bash
+python checkpoint_validation.py
+```
+> Các tham số có thể chỉnh trong file `checkpoint_validation.py`.
+
+### 7. Chạy TextRank
 ```bash
 python text_rank.py
 ```
