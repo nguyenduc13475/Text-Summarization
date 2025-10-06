@@ -93,7 +93,7 @@ class NeuralIntraAttentionModel(nn.Module):
         if self.device.type == "cuda":
             self.scaler = torch.amp.GradScaler()
         self.rl_loss_factor = rl_loss_factor
-        self.loss_scale = 1e-3
+        self.loss_scale = 1e-2
 
     def _safe_ids(self, ids):
         return torch.where(
