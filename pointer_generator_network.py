@@ -55,7 +55,6 @@ class PointerGeneratorNetwork(nn.Module):
             batch_first=True,
             bidirectional=True,
             num_layers=num_layers,
-            dropout=0.3,
         )
         self.enc_to_dec_hidden = nn.Linear(encoder_hidden_dim * 2, decoder_hidden_dim)
         self.enc_to_dec_cell = nn.Linear(encoder_hidden_dim * 2, decoder_hidden_dim)
@@ -64,7 +63,6 @@ class PointerGeneratorNetwork(nn.Module):
             decoder_hidden_dim,
             batch_first=True,
             num_layers=num_layers,
-            dropout=0.3,
         )
         self.enc_hidden_to_attn = nn.Linear(encoder_hidden_dim * 2, attention_dim)
         self.dec_hidden_to_attn = nn.Linear(

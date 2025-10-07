@@ -195,7 +195,7 @@ class Transformer(nn.Module):
 
         self.embedding_layer = EmbeddingLayer(self.vocab_size, d_model)
         self.transformer = SimpleTransformer(
-            d_model=d_model, nhead=nhead, num_layers=num_layers, dropout=0.3
+            d_model=d_model, nhead=nhead, num_layers=num_layers, dropout=0
         )
         self.out_proj = nn.Linear(d_model, self.vocab_size - self.end_token)
         self.device = torch.device(device)

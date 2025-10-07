@@ -59,14 +59,12 @@ class NeuralIntraAttentionModel(nn.Module):
             batch_first=True,
             bidirectional=True,
             num_layers=num_layers,
-            dropout=0.3,
         )
         self.decoder = nn.LSTM(
             embedding_dim,
             hidden_dim * 2,
             batch_first=True,
             num_layers=num_layers,
-            dropout=0.3,
         )
         self.encoder_attn_proj = nn.Parameter(
             torch.randn(hidden_dim * 2, hidden_dim * 2)
