@@ -36,6 +36,8 @@ def token_ids_to_text(tokenizer, ids, oov_list, return_output="text"):
         for idx in ids:
             if idx < vocab_size:
                 tokens.append(tokenizer.id_to_token(idx))
+                if tokens[-1] == "</s>":
+                    break
             else:
                 tokens.append(oov_list[idx - vocab_size])
 
@@ -46,6 +48,8 @@ def token_ids_to_text(tokenizer, ids, oov_list, return_output="text"):
         for idx in ids:
             if idx < vocab_size:
                 tokens.append(tokenizer.id_to_token(idx))
+                if tokens[-1] == "</s>":
+                    break
             else:
                 oov_idx = idx - vocab_size
                 oov_token = oov_list[oov_idx]
