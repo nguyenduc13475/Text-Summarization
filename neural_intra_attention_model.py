@@ -38,13 +38,19 @@ class NeuralIntraAttentionModel(nn.Module):
         tokenizer,
         embedding_dim=128,
         hidden_dim=256,
+        bottle_neck_dim=512,
         num_layers=2,
         rl_loss_factor=1.0,
-        learning_rate=1e-2,
+        learning_rate=1e-3,
         device="cpu",
     ):
         super().__init__()
         self.vocab_size = tokenizer.get_vocab_size()
+        self.unknown_token = tokenizer.token_to_id("<unk>")
+        self.start_token = tokenizer.token_to_id("<s>")
+        self.end_token = tokenizer.token_to_id("</s>")
+        self.pad_token = tokenizer.token_to_id("<pad>")
+        self.tokenizer = tokenizer
         self.num_layers = num_layers
         self.embedding_layer = nn.Embedding(self.vocab_size, embedding_dim)
         self.encoder = nn.LSTM(
@@ -70,18 +76,13 @@ class NeuralIntraAttentionModel(nn.Module):
         )
         torch.nn.init.xavier_uniform_(self.decoder_attn_proj)
 
-        self.vocab_proj = nn.Parameter(torch.empty(embedding_dim, 6 * hidden_dim))
-        torch.nn.init.xavier_uniform_(self.vocab_proj)
+        self.vocab_proj_1 = nn.Linear(6 * hidden_dim, bottle_neck_dim)
+        self.vocab_proj_2 = nn.Linear(bottle_neck_dim, self.vocab_size - self.end_token)
+        self.bottle_neck_activation = nn.ReLU()
 
         self.concat_state_to_switch = nn.Linear(6 * hidden_dim, 1)
 
         self.hidden_dim = hidden_dim
-        self.unknown_token = tokenizer.token_to_id("<unk>")
-        self.start_token = tokenizer.token_to_id("<s>")
-        self.end_token = tokenizer.token_to_id("</s>")
-        self.pad_token = tokenizer.token_to_id("<pad>")
-        self.tokenizer = tokenizer
-        self.out_bias = nn.Parameter(torch.zeros(self.vocab_size - self.end_token))
         self.device = torch.device(device)
 
         self.apply(init_weights)
@@ -124,10 +125,6 @@ class NeuralIntraAttentionModel(nn.Module):
         for oov_list in oov_lists:
             if len(oov_list) > max_num_oovs:
                 max_num_oovs = len(oov_list)
-
-        out_proj = torch.tanh(
-            self.embedding_layer.weight[self.end_token :] @ self.vocab_proj
-        )
 
         batch_embeddings = self._safe_embed(batch_input_ids)
 
@@ -271,7 +268,10 @@ class NeuralIntraAttentionModel(nn.Module):
                 )
 
                 vocab_distributions = F.softmax(
-                    concat_states @ out_proj.T + self.out_bias, dim=1
+                    self.vocab_proj_2(
+                        self.bottle_neck_activation(self.vocab_proj_1(concat_states))
+                    ),
+                    dim=1,
                 )
 
                 if mode["name"] == "teacher":
@@ -514,10 +514,6 @@ class NeuralIntraAttentionModel(nn.Module):
                 + 1
             )
 
-            out_proj = torch.tanh(
-                self.embedding_layer.weight[self.end_token :] @ self.vocab_proj
-            )
-
             batch_embeddings = self._safe_embed(batch_input_ids)
 
             batch_encoder_hidden_states, (
@@ -589,7 +585,10 @@ class NeuralIntraAttentionModel(nn.Module):
             )
 
             vocab_distributions = F.softmax(
-                concat_states @ out_proj.T + self.out_bias, dim=1
+                self.vocab_proj_2(
+                    self.bottle_neck_activation(self.vocab_proj_1(concat_states))
+                ),
+                dim=1,
             )
 
             p_gens = torch.sigmoid(self.concat_state_to_switch(concat_states))
@@ -699,7 +698,10 @@ class NeuralIntraAttentionModel(nn.Module):
                 )
 
                 vocab_distributions = F.softmax(
-                    concat_states @ out_proj.T + self.out_bias, dim=1
+                    self.vocab_proj_2(
+                        self.bottle_neck_activation(self.vocab_proj_1(concat_states))
+                    ),
+                    dim=1,
                 )
 
                 p_gens = torch.sigmoid(self.concat_state_to_switch(concat_states))

@@ -133,9 +133,10 @@ if __name__ == "__main__":
                 tokenizer=tokenizer,
                 embedding_dim=128,
                 hidden_dim=256,
+                bottle_neck_dim=512,
                 num_layers=2,
                 rl_loss_factor=1.0,
-                learning_rate=1e-2,
+                learning_rate=1e-3,
                 device=DEVICE,
             )
         case "TRANSFORMER":
