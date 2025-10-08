@@ -217,10 +217,9 @@ class NeuralIntraAttentionModel(nn.Module):
                         batch_encoder_attention_scores
                     )
                 else:
-                    batch_encoder_temporal_scores = (
-                        torch.exp(batch_encoder_attention_scores)
-                        / batch_cummulative_encoder_attention_scores
-                    )
+                    batch_encoder_temporal_scores = torch.exp(
+                        torch.clamp(batch_encoder_attention_scores, -100, 100)
+                    ) / (batch_cummulative_encoder_attention_scores + 1e-8)
 
                 batch_encoder_temporal_scores = (
                     batch_encoder_temporal_scores.masked_fill(
