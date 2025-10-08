@@ -22,10 +22,10 @@ from utils import load_checkpoint, name_to_latex, save_checkpoint, set_seed
 
 set_seed()
 
-MODEL = "POINTER_GENERATOR_NETWORK"
+MODEL = "NEURAL_INTRA_ATTENTION_MODEL"
 CHECKPOINT_FOLDER = f"{MODEL.lower()}_checkpoints"
 NUM_EPOCHS = 200
-MAX_TOKENS_EACH_BATCH = 60000
+MAX_TOKENS_EACH_BATCH = 10000
 TRAIN_DATASET_LENGTH = None
 VALIDATION_DATASET_LENGTH = None
 CONTINUE_TRAINING = True
@@ -144,7 +144,7 @@ if __name__ == "__main__":
                 d_model=256,
                 nhead=8,
                 num_layers=3,
-                learning_rate=1e-3,
+                learning_rate=1e-2,
                 device=DEVICE,
             )
 

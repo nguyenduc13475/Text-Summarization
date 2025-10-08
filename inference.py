@@ -166,7 +166,7 @@ if __name__ == "__main__":
             output = model.infer(
                 input_ids,
                 max_output_length=200,
-                beam_width=3,
+                beam_width=2,
                 return_attention=ATTENTION_PLOT,
                 return_embedding=EMBEDDING_PLOT,
             )

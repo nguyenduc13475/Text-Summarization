@@ -169,7 +169,7 @@ class PointerGeneratorNetwork(nn.Module):
                 current_embeddings.unsqueeze(1),
                 (decoder_hidden_states, decoder_cell_states),
             )
-            batch_attention_scores = F.tanh(
+            batch_attention_scores = torch.tanh(
                 self.enc_hidden_to_attn(batch_encoder_hidden_states)
                 + self.dec_hidden_to_attn(decoder_hidden_states[-1]).unsqueeze(1)
                 + self.coverage_to_attn(coverage_vectors.unsqueeze(2))
@@ -192,7 +192,7 @@ class PointerGeneratorNetwork(nn.Module):
                 ),
                 dim=1,
             )
-            p_gens = F.sigmoid(
+            p_gens = torch.sigmoid(
                 self.context_to_switch(context_vectors)
                 + self.dec_hidden_to_switch(decoder_hidden_states[-1])
                 + self.embedding_to_switch(current_embeddings)
@@ -347,7 +347,7 @@ class PointerGeneratorNetwork(nn.Module):
                 current_embeddings.unsqueeze(1),
                 (decoder_hidden_states, decoder_cell_states),
             )
-            batch_attention_scores = F.tanh(
+            batch_attention_scores = torch.tanh(
                 self.enc_hidden_to_attn(batch_encoder_hidden_states)
                 + self.dec_hidden_to_attn(decoder_hidden_states[-1]).unsqueeze(1)
             )
@@ -370,7 +370,7 @@ class PointerGeneratorNetwork(nn.Module):
                 ),
                 dim=1,
             )
-            p_gens = F.sigmoid(
+            p_gens = torch.sigmoid(
                 self.context_to_switch(context_vectors)
                 + self.dec_hidden_to_switch(decoder_hidden_states[-1])
                 + self.embedding_to_switch(current_embeddings)
@@ -412,7 +412,7 @@ class PointerGeneratorNetwork(nn.Module):
                     ),
                 )
 
-                batch_attention_scores = F.tanh(
+                batch_attention_scores = torch.tanh(
                     self.enc_hidden_to_attn(batch_encoder_hidden_states)
                     + self.dec_hidden_to_attn(decoder_hidden_states[-1]).unsqueeze(1)
                     + self.coverage_to_attn(coverage_vectors.unsqueeze(2))
@@ -438,7 +438,7 @@ class PointerGeneratorNetwork(nn.Module):
                     ),
                     dim=1,
                 )
-                p_gens = F.sigmoid(
+                p_gens = torch.sigmoid(
                     self.context_to_switch(context_vectors)
                     + self.dec_hidden_to_switch(decoder_hidden_states[-1])
                     + self.embedding_to_switch(current_embeddings)

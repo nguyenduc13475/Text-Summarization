@@ -31,12 +31,6 @@ def init_weights(m):
                 start, end = n // 4, n // 2
                 param.data[start:end].fill_(1.0)
 
-    elif isinstance(m, nn.Parameter):
-        if m.dim() > 1:
-            init.xavier_uniform_(m.data)
-        else:
-            init.zeros_(m.data)
-
 
 class NeuralIntraAttentionModel(nn.Module):
     def __init__(
@@ -67,12 +61,18 @@ class NeuralIntraAttentionModel(nn.Module):
             num_layers=num_layers,
         )
         self.encoder_attn_proj = nn.Parameter(
-            torch.randn(hidden_dim * 2, hidden_dim * 2)
+            torch.empty(hidden_dim * 2, hidden_dim * 2)
         )
+        torch.nn.init.xavier_uniform_(self.encoder_attn_proj)
+
         self.decoder_attn_proj = nn.Parameter(
-            torch.randn(hidden_dim * 2, hidden_dim * 2)
+            torch.empty(hidden_dim * 2, hidden_dim * 2)
         )
-        self.vocab_proj = nn.Parameter(torch.randn(embedding_dim, 6 * hidden_dim))
+        torch.nn.init.xavier_uniform_(self.decoder_attn_proj)
+
+        self.vocab_proj = nn.Parameter(torch.empty(embedding_dim, 6 * hidden_dim))
+        torch.nn.init.xavier_uniform_(self.vocab_proj)
+
         self.concat_state_to_switch = nn.Linear(6 * hidden_dim, 1)
 
         self.hidden_dim = hidden_dim
@@ -81,9 +81,10 @@ class NeuralIntraAttentionModel(nn.Module):
         self.end_token = tokenizer.token_to_id("</s>")
         self.pad_token = tokenizer.token_to_id("<pad>")
         self.tokenizer = tokenizer
-        self.out_bias = nn.Parameter(torch.randn(self.vocab_size - self.end_token))
+        self.out_bias = nn.Parameter(torch.zeros(self.vocab_size - self.end_token))
         self.device = torch.device(device)
 
+        self.apply(init_weights)
         self.to(device)
         self.optimizer = optim.Adam(
             self.parameters(), lr=learning_rate, weight_decay=1e-5
@@ -124,7 +125,7 @@ class NeuralIntraAttentionModel(nn.Module):
             if len(oov_list) > max_num_oovs:
                 max_num_oovs = len(oov_list)
 
-        out_proj = F.tanh(
+        out_proj = torch.tanh(
             self.embedding_layer.weight[self.end_token :] @ self.vocab_proj
         )
 
@@ -192,10 +193,12 @@ class NeuralIntraAttentionModel(nn.Module):
                     batch_size, device=self.device
                 )
                 sampling_sequences = torch.empty(
-                    batch_size, 0, device=self.device
-                ).long()
+                    batch_size, 0, device=self.device, dtype=torch.long
+                )
             elif mode["name"] == "greedy":
-                greedy_sequences = torch.empty(batch_size, 0, device=self.device).long()
+                greedy_sequences = torch.empty(
+                    batch_size, 0, device=self.device, dtype=torch.long
+                )
 
             for t in range(mode["max_steps"]):
                 current_embeddings = self.embedding_layer(current_tokens)
@@ -265,7 +268,7 @@ class NeuralIntraAttentionModel(nn.Module):
                 )
 
                 if mode["name"] == "teacher":
-                    p_gens = F.sigmoid(
+                    p_gens = torch.sigmoid(
                         self.concat_state_to_switch(concat_states)
                     ).squeeze(1)
                     next_tokens = batch_target_ids[:, t]
@@ -286,7 +289,7 @@ class NeuralIntraAttentionModel(nn.Module):
                     )
 
                 elif mode["name"] == "sampling":
-                    p_gens = F.sigmoid(self.concat_state_to_switch(concat_states))
+                    p_gens = torch.sigmoid(self.concat_state_to_switch(concat_states))
                     generator_probs = F.pad(
                         p_gens * vocab_distributions, (self.end_token, max_num_oovs)
                     )
@@ -319,7 +322,7 @@ class NeuralIntraAttentionModel(nn.Module):
                     )
 
                 elif mode["name"] == "greedy":
-                    p_gens = F.sigmoid(self.concat_state_to_switch(concat_states))
+                    p_gens = torch.sigmoid(self.concat_state_to_switch(concat_states))
                     generator_probs = F.pad(
                         p_gens * vocab_distributions, (self.end_token, max_num_oovs)
                     )
@@ -443,6 +446,7 @@ class NeuralIntraAttentionModel(nn.Module):
                 batch_target_ids,
                 oov_lists,
                 input_lengths,
+                target_lengths,
                 max_reinforce_length,
                 target_texts,
             )
@@ -502,7 +506,7 @@ class NeuralIntraAttentionModel(nn.Module):
                 + 1
             )
 
-            out_proj = F.tanh(
+            out_proj = torch.tanh(
                 self.embedding_layer.weight[self.end_token :] @ self.vocab_proj
             )
 
@@ -576,7 +580,7 @@ class NeuralIntraAttentionModel(nn.Module):
                 concat_states @ out_proj.T + self.out_bias, dim=1
             )
 
-            p_gens = F.sigmoid(self.concat_state_to_switch(concat_states))
+            p_gens = torch.sigmoid(self.concat_state_to_switch(concat_states))
             batch_generator_probs = F.pad(
                 p_gens * vocab_distributions, (self.end_token, num_oovs)
             )
@@ -680,7 +684,7 @@ class NeuralIntraAttentionModel(nn.Module):
                     concat_states @ out_proj.T + self.out_bias, dim=1
                 )
 
-                p_gens = F.sigmoid(self.concat_state_to_switch(concat_states))
+                p_gens = torch.sigmoid(self.concat_state_to_switch(concat_states))
                 batch_generator_probs = F.pad(
                     p_gens * vocab_distributions, (self.end_token, num_oovs)
                 )
