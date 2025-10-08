@@ -134,8 +134,8 @@ if __name__ == "__main__":
                 embedding_dim=128,
                 hidden_dim=256,
                 num_layers=2,
-                rl_loss_factor=0.75,
-                learning_rate=1e-2,
+                rl_loss_factor=1.0,
+                learning_rate=1e-3,
                 device=DEVICE,
             )
         case "TRANSFORMER":
