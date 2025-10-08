@@ -42,7 +42,7 @@ class PointerGeneratorNetwork(nn.Module):
         bottle_neck_dim=512,
         num_layers=2,
         cov_loss_factor=1.0,
-        learning_rate=1e-2,
+        learning_rate=1e-3,
         device="cpu",
     ):
         super().__init__()
