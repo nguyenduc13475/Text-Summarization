@@ -156,14 +156,14 @@ class NeuralIntraAttentionModel(nn.Module):
                 "name": "teacher",
                 "max_steps": max_target_length,
             },
-            {
-                "name": "sampling",
-                "max_steps": max_reinforce_length,
-            },
-            {
-                "name": "greedy",
-                "max_steps": max_reinforce_length,
-            },
+            # {
+            #     "name": "sampling",
+            #     "max_steps": max_reinforce_length,
+            # },
+            # {
+            #     "name": "greedy",
+            #     "max_steps": max_reinforce_length,
+            # },
         ]
 
         for mode in modes:
@@ -407,13 +407,14 @@ class NeuralIntraAttentionModel(nn.Module):
                     )["rouge2"][0]
                     greedy_sequence_metrics.append(greedy_sequence_metric)
 
-        rl_loss = (
-            (
-                torch.tensor(greedy_sequence_metrics, device=self.device)
-                - torch.tensor(sampling_sequence_metrics, device=self.device)
-            )
-            * cummulative_sampling_log_probs
-        ).sum()
+        rl_loss = 0
+        # (
+        #     (
+        #         torch.tensor(greedy_sequence_metrics, device=self.device)
+        #         - torch.tensor(sampling_sequence_metrics, device=self.device)
+        #     )
+        #     * cummulative_sampling_log_probs
+        # ).sum()
 
         total_loss = nll_loss + rl_loss * self.rl_loss_factor
 
