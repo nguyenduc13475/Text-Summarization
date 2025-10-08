@@ -25,7 +25,7 @@ set_seed()
 MODEL = "NEURAL_INTRA_ATTENTION_MODEL"
 CHECKPOINT_FOLDER = f"{MODEL.lower()}_checkpoints"
 NUM_EPOCHS = 200
-MAX_TOKENS_EACH_BATCH = 60000
+MAX_TOKENS_EACH_BATCH = 10000
 TRAIN_DATASET_LENGTH = None
 VALIDATION_DATASET_LENGTH = None
 CONTINUE_TRAINING = True
@@ -135,7 +135,7 @@ if __name__ == "__main__":
                 hidden_dim=256,
                 num_layers=2,
                 rl_loss_factor=1.0,
-                learning_rate=1e-3,
+                learning_rate=1e-2,
                 device=DEVICE,
             )
         case "TRANSFORMER":
