@@ -197,7 +197,9 @@ if __name__ == "__main__":
 
                     plot_attention_heatmap(
                         ax,
-                        output["cross_attention_distributions"][0],
+                        output["cross_attention_distributions"][0][
+                            : len(output_tokens)
+                        ],
                         output_tokens,
                         input_tokens,
                         "Input tokens",
