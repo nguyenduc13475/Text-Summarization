@@ -344,7 +344,7 @@ class NeuralIntraAttentionModel(nn.Module):
 
                 batch_cummulative_encoder_attention_scores = (
                     batch_cummulative_encoder_attention_scores
-                    + batch_encoder_attention_scores
+                    + torch.exp(batch_encoder_attention_scores)
                 )
 
                 previous_decoder_hidden_states = torch.cat(
