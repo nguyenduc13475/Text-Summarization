@@ -407,7 +407,7 @@ class NeuralIntraAttentionModel(nn.Module):
                     )["rouge2"][0]
                     greedy_sequence_metrics.append(greedy_sequence_metric)
 
-        rl_loss = 0
+        rl_loss = torch.tensor(0.0)
         # (
         #     (
         #         torch.tensor(greedy_sequence_metrics, device=self.device)
