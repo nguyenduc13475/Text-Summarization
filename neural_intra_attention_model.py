@@ -213,7 +213,9 @@ class NeuralIntraAttentionModel(nn.Module):
                 ).squeeze(1)
 
                 if t == 0:
-                    batch_encoder_temporal_scores = batch_encoder_attention_scores
+                    batch_encoder_temporal_scores = torch.exp(
+                        batch_encoder_attention_scores
+                    )
                 else:
                     batch_encoder_temporal_scores = (
                         torch.exp(batch_encoder_attention_scores)

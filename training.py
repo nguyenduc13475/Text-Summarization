@@ -25,7 +25,7 @@ set_seed()
 MODEL = "NEURAL_INTRA_ATTENTION_MODEL"
 CHECKPOINT_FOLDER = f"{MODEL.lower()}_checkpoints"
 NUM_EPOCHS = 200
-MAX_TOKENS_EACH_BATCH = 60000
+MAX_TOKENS_EACH_BATCH = 10000
 TRAIN_DATASET_LENGTH = None
 VALIDATION_DATASET_LENGTH = None
 CONTINUE_TRAINING = True
@@ -211,7 +211,7 @@ if __name__ == "__main__":
                             batch["oov_list"],
                             batch["input_length"],
                             batch["target_length"],
-                            max_reinforce_length=200,
+                            max_reinforce_length=100,
                             target_texts=batch["target_text"],
                         )
                     case "TRANSFORMER":
