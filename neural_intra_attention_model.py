@@ -208,9 +208,15 @@ class NeuralIntraAttentionModel(nn.Module):
                 )
 
                 batch_encoder_attention_scores = (
-                    (decoder_hidden_states[-1] @ self.encoder_attn_proj).unsqueeze(1)
-                    @ batch_encoder_hidden_states.transpose(1, 2)
-                ).squeeze(1)
+                    (
+                        (decoder_hidden_states[-1] @ self.encoder_attn_proj).unsqueeze(
+                            1
+                        )
+                        @ batch_encoder_hidden_states.transpose(1, 2)
+                    )
+                    .squeeze(1)
+                    .clamp(max=30)
+                )
 
                 if t == 0:
                     batch_encoder_temporal_scores = torch.exp(
@@ -218,7 +224,7 @@ class NeuralIntraAttentionModel(nn.Module):
                     )
                 else:
                     batch_encoder_temporal_scores = torch.exp(
-                        torch.clamp(batch_encoder_attention_scores, -100, 100)
+                        batch_encoder_attention_scores
                     ) / (batch_cummulative_encoder_attention_scores + 1e-8)
 
                 batch_encoder_temporal_scores = (
@@ -548,9 +554,13 @@ class NeuralIntraAttentionModel(nn.Module):
                 (decoder_hidden_states, decoder_cell_states),
             )
             batch_encoder_temporal_scores = (
-                (decoder_hidden_states[-1] @ self.encoder_attn_proj).unsqueeze(1)
-                @ batch_encoder_hidden_states.transpose(1, 2)
-            ).squeeze(1)
+                (
+                    (decoder_hidden_states[-1] @ self.encoder_attn_proj).unsqueeze(1)
+                    @ batch_encoder_hidden_states.transpose(1, 2)
+                )
+                .squeeze(1)
+                .clamp(max=30)
+            )
             input_padding_mask = batch_input_ids == self.pad_token
             batch_encoder_temporal_scores = batch_encoder_temporal_scores.masked_fill(
                 input_padding_mask, float("-inf")
@@ -622,9 +632,15 @@ class NeuralIntraAttentionModel(nn.Module):
                 )
 
                 batch_encoder_attention_scores = (
-                    (decoder_hidden_states[-1] @ self.encoder_attn_proj).unsqueeze(1)
-                    @ batch_encoder_hidden_states.transpose(1, 2)
-                ).squeeze(1)
+                    (
+                        (decoder_hidden_states[-1] @ self.encoder_attn_proj).unsqueeze(
+                            1
+                        )
+                        @ batch_encoder_hidden_states.transpose(1, 2)
+                    )
+                    .squeeze(1)
+                    .clamp(max=30)
+                )
 
                 batch_encoder_temporal_scores = (
                     torch.exp(batch_encoder_attention_scores)
@@ -648,7 +664,7 @@ class NeuralIntraAttentionModel(nn.Module):
 
                 batch_cummulative_encoder_attention_scores = (
                     batch_cummulative_encoder_attention_scores
-                    + batch_encoder_attention_scores
+                    + torch.exp(batch_encoder_attention_scores)
                 )
 
                 batch_decoder_attention_scores = (
