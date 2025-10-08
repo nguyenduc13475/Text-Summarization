@@ -301,10 +301,6 @@ class Transformer(nn.Module):
     ):
         self.eval()
         with torch.no_grad():
-            if not isinstance(batch_input_ids, torch.Tensor):
-                batch_input_ids = torch.tensor(
-                    batch_input_ids, device=self.device, dtype=torch.long
-                )
             batch_input_ids = batch_input_ids.to(self.device)
             beam_width = min(beam_width, self.vocab_size)
 
@@ -316,7 +312,7 @@ class Transformer(nn.Module):
                 batch_size, beam_width, self.start_token, self.end_token, self.device
             )
 
-            batch_input_embeddings = self._safe_embed(batch_input_ids)
+            batch_input_embeddings = self.embedding_layer(batch_input_ids)
 
             input_padding_mask = self.make_padding_mask(batch_input_ids)
 
