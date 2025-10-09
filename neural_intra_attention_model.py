@@ -212,7 +212,7 @@ class NeuralIntraAttentionModel(nn.Module):
                         @ batch_encoder_hidden_states.transpose(1, 2)
                     )
                     .squeeze(1)
-                    .clamp(max=30)
+                    .clamp(-10, 10)
                 )
 
                 if t == 0:
@@ -222,15 +222,16 @@ class NeuralIntraAttentionModel(nn.Module):
                 else:
                     batch_encoder_temporal_scores = torch.exp(
                         batch_encoder_attention_scores
-                    ) / (batch_cummulative_encoder_attention_scores + 1e-8)
+                    ) / (batch_cummulative_encoder_attention_scores + 1e-5)
 
                 batch_encoder_temporal_scores = (
                     batch_encoder_temporal_scores.masked_fill(
-                        batch_input_ids == self.pad_token, float("-inf")
+                        batch_input_ids == self.pad_token, 0.0
                     )
                 )
-                encoder_attention_distributions = F.softmax(
-                    batch_encoder_temporal_scores, dim=1
+                encoder_attention_distributions = (
+                    batch_encoder_temporal_scores
+                    / batch_encoder_temporal_scores.sum(dim=1, keepdim=True)
                 )
 
                 encoder_context_vectors = torch.bmm(
@@ -550,20 +551,21 @@ class NeuralIntraAttentionModel(nn.Module):
                 current_embeddings.unsqueeze(1),
                 (decoder_hidden_states, decoder_cell_states),
             )
-            batch_encoder_temporal_scores = (
+            batch_encoder_attention_scores = (
                 (
                     (decoder_hidden_states[-1] @ self.encoder_attn_proj).unsqueeze(1)
                     @ batch_encoder_hidden_states.transpose(1, 2)
                 )
                 .squeeze(1)
-                .clamp(max=30)
+                .clamp(-10, 10)
             )
+            batch_encoder_temporal_scores = torch.exp(batch_encoder_attention_scores)
             input_padding_mask = batch_input_ids == self.pad_token
             batch_encoder_temporal_scores = batch_encoder_temporal_scores.masked_fill(
-                input_padding_mask, float("-inf")
+                input_padding_mask, 0.0
             )
-            encoder_attention_distributions = F.softmax(
-                batch_encoder_temporal_scores, dim=1
+            encoder_attention_distributions = (
+                batch_encoder_temporal_scores / batch_encoder_temporal_scores.sum(dim=1)
             )
 
             encoder_context_vectors = torch.bmm(
@@ -611,9 +613,9 @@ class NeuralIntraAttentionModel(nn.Module):
             batch_encoder_hidden_states = batch_encoder_hidden_states.repeat_interleave(
                 beam_width, dim=0
             )
-            batch_cummulative_encoder_attention_scores = (
-                batch_encoder_temporal_scores.repeat_interleave(beam_width, dim=0)
-            )
+            batch_cummulative_encoder_attention_scores = torch.exp(
+                batch_encoder_attention_scores
+            ).repeat_interleave(beam_width, dim=0)
             input_padding_mask = input_padding_mask.repeat_interleave(beam_width, dim=0)
             previous_decoder_hidden_states = decoder_hidden_states[-1].unsqueeze(1)
 
@@ -639,7 +641,7 @@ class NeuralIntraAttentionModel(nn.Module):
                         @ batch_encoder_hidden_states.transpose(1, 2)
                     )
                     .squeeze(1)
-                    .clamp(max=30)
+                    .clamp(-10, 10)
                 )
 
                 batch_encoder_temporal_scores = (
@@ -648,13 +650,12 @@ class NeuralIntraAttentionModel(nn.Module):
                 )
 
                 batch_encoder_temporal_scores = (
-                    batch_encoder_temporal_scores.masked_fill(
-                        input_padding_mask, float("-inf")
-                    )
+                    batch_encoder_temporal_scores.masked_fill(input_padding_mask, 0.0)
                 )
 
-                encoder_attention_distributions = F.softmax(
-                    batch_encoder_temporal_scores, dim=1
+                encoder_attention_distributions = (
+                    batch_encoder_temporal_scores
+                    / batch_encoder_temporal_scores.sum(dim=1)
                 )
 
                 encoder_context_vectors = torch.bmm(
