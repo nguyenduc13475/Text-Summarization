@@ -25,7 +25,7 @@ set_seed()
 MODEL = "NEURAL_INTRA_ATTENTION_MODEL"
 CHECKPOINT_FOLDER = f"{MODEL.lower()}_checkpoints"
 NUM_EPOCHS = 200
-MAX_TOKENS_EACH_BATCH = 45000
+MAX_TOKENS_EACH_BATCH = 30000
 TRAIN_DATASET_LENGTH = None
 VALIDATION_DATASET_LENGTH = None
 CONTINUE_TRAINING = True
@@ -135,7 +135,7 @@ if __name__ == "__main__":
                 hidden_dim=256,
                 bottle_neck_dim=512,
                 num_layers=2,
-                rl_loss_factor=1.0,
+                rl_loss_factor=0.0,
                 learning_rate=1e-3,
                 device=DEVICE,
             )
@@ -206,13 +206,13 @@ if __name__ == "__main__":
                             batch["target_length"],
                         )
                     case "NEURAL_INTRA_ATTENTION_MODEL":
+                        model.rl_loss_factor = 3.0 if epoch > 2 else 0.0
                         losses = batch_step(
                             batch["input_ids"],
                             batch["target_ids"],
                             batch["oov_list"],
                             batch["input_length"],
                             batch["target_length"],
-                            max_reinforce_length=100,
                             target_texts=batch["target_text"],
                         )
                     case "TRANSFORMER":

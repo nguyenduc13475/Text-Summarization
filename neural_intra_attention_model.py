@@ -112,7 +112,6 @@ class NeuralIntraAttentionModel(nn.Module):
         oov_lists,
         input_lengths,
         target_lengths,
-        max_reinforce_length=100,
         target_texts=None,
     ):
         batch_input_ids = batch_input_ids.to(self.device)
@@ -148,20 +147,15 @@ class NeuralIntraAttentionModel(nn.Module):
         sampling_sequence_metrics = []
         greedy_sequence_metrics = []
 
-        modes = [
-            {
-                "name": "teacher",
-                "max_steps": max_target_length,
-            },
-            # {
-            #     "name": "sampling",
-            #     "max_steps": max_reinforce_length,
-            # },
-            # {
-            #     "name": "greedy",
-            #     "max_steps": max_reinforce_length,
-            # },
-        ]
+        modes = (
+            [
+                "teacher",
+                "sampling",
+                "greedy",
+            ]
+            if self.rl_loss_factor > 0
+            else ["teacher"]
+        )
 
         for mode in modes:
             decoder_hidden_states = (
@@ -182,22 +176,22 @@ class NeuralIntraAttentionModel(nn.Module):
                 batch_size, 0, self.hidden_dim * 2, device=self.device
             )
 
-            if mode["name"] in ["sampling", "greedy"]:
+            if mode in ["sampling", "greedy"]:
                 is_continues = torch.ones(batch_size, device=self.device)
 
-            if mode["name"] == "sampling":
+            if mode == "sampling":
                 cummulative_sampling_log_probs = torch.zeros(
                     batch_size, device=self.device
                 )
                 sampling_sequences = torch.empty(
                     batch_size, 0, device=self.device, dtype=torch.long
                 )
-            elif mode["name"] == "greedy":
+            elif mode == "greedy":
                 greedy_sequences = torch.empty(
                     batch_size, 0, device=self.device, dtype=torch.long
                 )
 
-            for t in range(mode["max_steps"]):
+            for t in range(max_target_length):
                 current_embeddings = self.embedding_layer(current_tokens)
                 _, (decoder_hidden_states, decoder_cell_states) = self.decoder(
                     current_embeddings.unsqueeze(1),
@@ -275,7 +269,7 @@ class NeuralIntraAttentionModel(nn.Module):
                     dim=1,
                 )
 
-                if mode["name"] == "teacher":
+                if mode == "teacher":
                     p_gens = torch.sigmoid(
                         self.concat_state_to_switch(concat_states)
                     ).squeeze(1)
@@ -296,7 +290,7 @@ class NeuralIntraAttentionModel(nn.Module):
                         )
                     )
 
-                elif mode["name"] == "sampling":
+                elif mode == "sampling":
                     p_gens = torch.sigmoid(self.concat_state_to_switch(concat_states))
                     generator_probs = F.pad(
                         p_gens * vocab_distributions, (self.end_token, max_num_oovs)
@@ -329,7 +323,7 @@ class NeuralIntraAttentionModel(nn.Module):
                         [sampling_sequences, sampling_sequence_steps], dim=1
                     )
 
-                elif mode["name"] == "greedy":
+                elif mode == "greedy":
                     p_gens = torch.sigmoid(self.concat_state_to_switch(concat_states))
                     generator_probs = F.pad(
                         p_gens * vocab_distributions, (self.end_token, max_num_oovs)
@@ -363,9 +357,9 @@ class NeuralIntraAttentionModel(nn.Module):
                     dim=1,
                 )
 
-            if mode["name"] == "teacher":
+            if mode == "teacher":
                 nll_loss = nll_losses.sum()
-            elif mode["name"] == "sampling":
+            elif mode == "sampling":
                 sampling_sequence_metrics = []
                 for batch_idx, sampling_sequence in enumerate(sampling_sequences):
                     sampling_sequence_metric = compute_metric(
@@ -386,7 +380,7 @@ class NeuralIntraAttentionModel(nn.Module):
                         ),
                     )["rouge2"][0]
                     sampling_sequence_metrics.append(sampling_sequence_metric)
-            elif mode["name"] == "greedy":
+            elif mode == "greedy":
                 greedy_sequence_metrics = []
                 for batch_idx, greedy_sequence in enumerate(greedy_sequences):
                     greedy_sequence_metric = compute_metric(
@@ -408,14 +402,17 @@ class NeuralIntraAttentionModel(nn.Module):
                     )["rouge2"][0]
                     greedy_sequence_metrics.append(greedy_sequence_metric)
 
-        rl_loss = torch.tensor(0.0)
-        # (
-        #     (
-        #         torch.tensor(greedy_sequence_metrics, device=self.device)
-        #         - torch.tensor(sampling_sequence_metrics, device=self.device)
-        #     )
-        #     * cummulative_sampling_log_probs
-        # ).sum()
+        rl_loss = (
+            (
+                (
+                    torch.tensor(greedy_sequence_metrics, device=self.device)
+                    - torch.tensor(sampling_sequence_metrics, device=self.device)
+                )
+                * cummulative_sampling_log_probs
+            ).sum()
+            if self.rl_loss_factor > 0
+            else torch.tensor(0.0)
+        )
 
         total_loss = nll_loss + rl_loss * self.rl_loss_factor
 
@@ -428,7 +425,6 @@ class NeuralIntraAttentionModel(nn.Module):
         oov_lists,
         input_lengths,
         target_lengths,
-        max_reinforce_length=100,
         target_texts=None,
     ):
         self.train()
@@ -442,7 +438,6 @@ class NeuralIntraAttentionModel(nn.Module):
                     oov_lists,
                     input_lengths,
                     target_lengths,
-                    max_reinforce_length,
                     target_texts,
                 )
             self.scaler.scale(losses["total_loss"] * self.loss_scale).backward()
@@ -456,7 +451,6 @@ class NeuralIntraAttentionModel(nn.Module):
                 oov_lists,
                 input_lengths,
                 target_lengths,
-                max_reinforce_length,
                 target_texts,
             )
             (losses["total_loss"] * self.loss_scale).backward()
@@ -471,7 +465,6 @@ class NeuralIntraAttentionModel(nn.Module):
         oov_lists,
         input_lengths,
         target_lengths,
-        max_reinforce_length=100,
         target_texts=None,
     ):
         self.eval()
@@ -482,7 +475,6 @@ class NeuralIntraAttentionModel(nn.Module):
                 oov_lists,
                 input_lengths,
                 target_lengths,
-                max_reinforce_length,
                 target_texts,
             )
             return tensor_dict_to_scalar(losses)
