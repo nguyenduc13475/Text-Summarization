@@ -115,6 +115,8 @@ class DynamicBatchSampler(Sampler):
         for idx in self.dataset.indices:
             input_length = len(self.dataset[idx]["input_ids"])
             target_length = len(self.dataset[idx]["target_ids"])
+            if target_length > input_length * 0.3:
+                continue
 
             proj_max_input = max(max_input_length, input_length)
             proj_max_target = max(max_target_length, target_length)
