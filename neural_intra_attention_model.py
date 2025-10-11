@@ -122,6 +122,8 @@ class NeuralIntraAttentionModel(nn.Module):
         target_lengths = target_lengths.to(self.device)
         batch_size, max_input_length = batch_input_ids.shape
         max_target_length = batch_target_ids.shape[1]
+        if return_rl_loss:
+            max_target_length = min(max_target_length, 50)
 
         max_num_oovs = 0
         for oov_list in oov_lists:
@@ -454,7 +456,7 @@ class NeuralIntraAttentionModel(nn.Module):
                     batch_target_ids,
                     oov_lists,
                     input_lengths,
-                    target_lengths.clamp(max=20),
+                    target_lengths,
                     target_texts,
                     return_rl_loss=True,
                 )
@@ -502,7 +504,7 @@ class NeuralIntraAttentionModel(nn.Module):
                 batch_target_ids,
                 oov_lists,
                 input_lengths,
-                target_lengths.clamp(max=20),
+                target_lengths,
                 target_texts,
                 return_rl_loss=True,
             )
