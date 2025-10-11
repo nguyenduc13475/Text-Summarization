@@ -452,7 +452,7 @@ class NeuralIntraAttentionModel(nn.Module):
                     batch_target_ids,
                     oov_lists,
                     input_lengths,
-                    target_lengths,
+                    target_lengths.clamp(max=50),
                     target_texts,
                     return_rl_loss=True,
                 )
@@ -498,7 +498,7 @@ class NeuralIntraAttentionModel(nn.Module):
                 batch_target_ids,
                 oov_lists,
                 input_lengths,
-                target_lengths,
+                target_lengths.clamp(max=50),
                 target_texts,
                 return_rl_loss=True,
             )
