@@ -1,3 +1,5 @@
+from contextlib import nullcontext
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -113,6 +115,7 @@ class NeuralIntraAttentionModel(nn.Module):
         input_lengths,
         target_lengths,
         target_texts=None,
+        return_rl_loss=False,
     ):
         batch_input_ids = batch_input_ids.to(self.device)
         batch_target_ids = batch_target_ids.to(self.device)
@@ -142,20 +145,16 @@ class NeuralIntraAttentionModel(nn.Module):
             batch_encoder_hidden_states, batch_first=True
         )
 
-        nll_losses = torch.zeros(batch_size, device=self.device)
-
-        sampling_sequence_metrics = []
-        greedy_sequence_metrics = []
-
-        modes = (
-            [
-                "teacher",
+        if return_rl_loss:
+            sampling_sequence_metrics = []
+            greedy_sequence_metrics = []
+            modes = [
                 "sampling",
                 "greedy",
             ]
-            if self.rl_loss_factor > 0
-            else ["teacher"]
-        )
+        else:
+            nll_losses = torch.zeros(batch_size, device=self.device)
+            modes = ["teacher"]
 
         for mode in modes:
             decoder_hidden_states = (
@@ -176,7 +175,7 @@ class NeuralIntraAttentionModel(nn.Module):
                 batch_size, 0, self.hidden_dim * 2, device=self.device
             )
 
-            if mode in ["sampling", "greedy"]:
+            if return_rl_loss:
                 is_continues = torch.ones(batch_size, device=self.device)
 
             if mode == "sampling":
@@ -402,21 +401,16 @@ class NeuralIntraAttentionModel(nn.Module):
                     )["rouge2"][0]
                     greedy_sequence_metrics.append(greedy_sequence_metric)
 
-        rl_loss = (
-            (
+        if return_rl_loss:
+            return (
                 (
                     torch.tensor(greedy_sequence_metrics, device=self.device)
                     - torch.tensor(sampling_sequence_metrics, device=self.device)
                 )
                 * cummulative_sampling_log_probs
             ).sum()
-            if self.rl_loss_factor > 0
-            else torch.tensor(0.0)
-        )
-
-        total_loss = nll_loss + rl_loss * self.rl_loss_factor
-
-        return {"nll_loss": nll_loss, "rl_loss": rl_loss, "total_loss": total_loss}
+        else:
+            return nll_loss
 
     def train_one_batch(
         self,
@@ -430,33 +424,54 @@ class NeuralIntraAttentionModel(nn.Module):
         self.train()
         self.optimizer.zero_grad()
 
-        if self.device.type == "cuda":
-            with torch.amp.autocast(device_type="cuda"):
-                losses = self.compute_loss(
-                    batch_input_ids,
-                    batch_target_ids,
-                    oov_lists,
-                    input_lengths,
-                    target_lengths,
-                    target_texts,
-                )
-            self.scaler.scale(losses["total_loss"] * self.loss_scale).backward()
-            self.scaler.unscale_(self.optimizer)
-            self.scaler.step(self.optimizer)
-            self.scaler.update()
-        else:
-            losses = self.compute_loss(
+        is_cuda = self.device.type == "cuda"
+
+        with torch.amp.autocast(device_type="cuda") if is_cuda else nullcontext():
+            nll_loss = self.compute_loss(
                 batch_input_ids,
                 batch_target_ids,
                 oov_lists,
                 input_lengths,
                 target_lengths,
                 target_texts,
+                return_rl_loss=False,
             )
-            (losses["total_loss"] * self.loss_scale).backward()
-            self.optimizer.step()
 
-        return tensor_dict_to_scalar(losses)
+            if is_cuda:
+                self.scaler.scale(nll_loss * self.loss_scale).backward()
+                self.scaler.unscale_(self.optimizer)
+                self.scaler.step(self.optimizer)
+                self.scaler.update()
+            else:
+                (nll_loss * self.loss_scale).backward()
+                self.optimizer.step()
+
+            if self.rl_loss_factor > 0:
+                rl_loss = self.compute_loss(
+                    batch_input_ids,
+                    batch_target_ids,
+                    oov_lists,
+                    input_lengths,
+                    target_lengths,
+                    target_texts,
+                    return_rl_loss=True,
+                )
+                if is_cuda:
+                    self.scaler.scale(
+                        rl_loss * self.loss_scale * self.rl_loss_factor
+                    ).backward()
+                    self.scaler.unscale_(self.optimizer)
+                    self.scaler.step(self.optimizer)
+                    self.scaler.update()
+                else:
+                    (rl_loss * self.loss_scale * self.rl_loss_factor).backward()
+                    self.optimizer.step()
+            else:
+                rl_loss = torch.tensor(0.0)
+
+        return tensor_dict_to_scalar(
+            {"total_loss": nll_loss + rl_loss, "nll_loss": nll_loss, "rl_loss": rl_loss}
+        )
 
     def validate_one_batch(
         self,
@@ -469,15 +484,31 @@ class NeuralIntraAttentionModel(nn.Module):
     ):
         self.eval()
         with torch.no_grad():
-            losses = self.compute_loss(
+            nll_loss = self.compute_loss(
                 batch_input_ids,
                 batch_target_ids,
                 oov_lists,
                 input_lengths,
                 target_lengths,
                 target_texts,
+                return_rl_loss=False,
             )
-            return tensor_dict_to_scalar(losses)
+            rl_loss = self.compute_loss(
+                batch_input_ids,
+                batch_target_ids,
+                oov_lists,
+                input_lengths,
+                target_lengths,
+                target_texts,
+                return_rl_loss=True,
+            )
+            return tensor_dict_to_scalar(
+                {
+                    "total_loss": nll_loss + rl_loss,
+                    "nll_loss": nll_loss,
+                    "rl_loss": rl_loss,
+                }
+            )
 
     def infer(
         self,
