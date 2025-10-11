@@ -446,13 +446,15 @@ class NeuralIntraAttentionModel(nn.Module):
                 (nll_loss * self.loss_scale).backward()
                 self.optimizer.step()
 
+            torch.cuda.empty_cache()
+
             if self.rl_loss_factor > 0:
                 rl_loss = self.compute_loss(
                     batch_input_ids,
                     batch_target_ids,
                     oov_lists,
                     input_lengths,
-                    target_lengths.clamp(max=50),
+                    target_lengths.clamp(max=20),
                     target_texts,
                     return_rl_loss=True,
                 )
@@ -468,6 +470,8 @@ class NeuralIntraAttentionModel(nn.Module):
                     self.optimizer.step()
             else:
                 rl_loss = torch.tensor(0.0)
+
+            torch.cuda.empty_cache()
 
         return tensor_dict_to_scalar(
             {"total_loss": nll_loss + rl_loss, "nll_loss": nll_loss, "rl_loss": rl_loss}
@@ -498,7 +502,7 @@ class NeuralIntraAttentionModel(nn.Module):
                 batch_target_ids,
                 oov_lists,
                 input_lengths,
-                target_lengths.clamp(max=50),
+                target_lengths.clamp(max=20),
                 target_texts,
                 return_rl_loss=True,
             )
