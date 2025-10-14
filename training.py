@@ -144,8 +144,8 @@ if __name__ == "__main__":
                 tokenizer=tokenizer,
                 d_model=256,
                 nhead=8,
-                num_layers=3,
-                learning_rate=1e-2,
+                num_layers=4,
+                learning_rate=1e-3,
                 device=DEVICE,
             )
 

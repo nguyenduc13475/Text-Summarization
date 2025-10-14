@@ -243,27 +243,16 @@ class Transformer(nn.Module):
             memory_key_padding_mask=input_padding_mask,
         )
 
-        batch_vocab_distributions = F.pad(
-            F.softmax(self.out_proj(decoder_outputs), dim=2), (self.end_token, 0)
-        )
-        batch_log_probs = torch.log(batch_vocab_distributions + 1e-9)
+        logits = self.out_proj(decoder_outputs)
+        logits = logits.reshape(-1, logits.shape[-1])
+        targets = batch_target_ids.reshape(-1) - self.end_token
 
-        smoothing = 0.1
-        batch_target_distributions = torch.zeros_like(batch_vocab_distributions)
-        batch_target_distributions.fill_(smoothing / (self.vocab_size - 1))
-        batch_target_distributions.scatter_(
-            2, batch_target_ids.unsqueeze(2), 1.0 - smoothing
-        )
-
-        batch_target_distributions.masked_fill_(
-            batch_target_ids.unsqueeze(2) == self.pad_token, 0.0
-        )
-
-        loss = F.kl_div(
-            batch_log_probs,
-            batch_target_distributions,
+        loss_fn = nn.CrossEntropyLoss(
+            ignore_index=self.pad_token - self.end_token,
+            label_smoothing=0.1,
             reduction="sum",
         )
+        loss = loss_fn(logits, targets)
 
         return {"total_loss": loss}
 
