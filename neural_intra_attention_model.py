@@ -594,7 +594,8 @@ class NeuralIntraAttentionModel(nn.Module):
                 input_padding_mask, 0.0
             )
             encoder_attention_distributions = (
-                batch_encoder_temporal_scores / batch_encoder_temporal_scores.sum(dim=1)
+                batch_encoder_temporal_scores
+                / batch_encoder_temporal_scores.sum(dim=1, keepdim=True)
             )
 
             encoder_context_vectors = torch.bmm(
@@ -684,7 +685,7 @@ class NeuralIntraAttentionModel(nn.Module):
 
                 encoder_attention_distributions = (
                     batch_encoder_temporal_scores
-                    / batch_encoder_temporal_scores.sum(dim=1)
+                    / batch_encoder_temporal_scores.sum(dim=1, keepdim=True)
                 )
 
                 encoder_context_vectors = torch.bmm(

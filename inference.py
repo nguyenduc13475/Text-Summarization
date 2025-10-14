@@ -17,10 +17,10 @@ from transformer import Transformer
 from utils import load_checkpoint, text_to_token_ids, token_ids_to_text
 
 MODELS = [
-    "TEXT_RANK",
-    "POINTER_GENERATOR_NETWORK",
+    # "TEXT_RANK",
+    # "POINTER_GENERATOR_NETWORK",
     "NEURAL_INTRA_ATTENTION_MODEL",
-    "TRANSFORMER",
+    # "TRANSFORMER",
 ]
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 ENV = detect_runtime_env()
@@ -135,9 +135,10 @@ if __name__ == "__main__":
                     tokenizer=tokenizer,
                     embedding_dim=128,
                     hidden_dim=256,
+                    bottle_neck_dim=512,
                     num_layers=2,
-                    rl_loss_factor=0.75,
-                    learning_rate=1e-2,
+                    rl_loss_factor=0.0,
+                    learning_rate=1e-3,
                     device=DEVICE,
                 )
             case "TRANSFORMER":
