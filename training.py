@@ -26,8 +26,8 @@ MODEL = "TRANSFORMER"
 CHECKPOINT_FOLDER = f"{MODEL.lower()}_checkpoints"
 NUM_EPOCHS = 200
 MAX_TOKENS_EACH_BATCH = 30000
-TRAIN_DATASET_LENGTH = 100
-VALIDATION_DATASET_LENGTH = 100
+TRAIN_DATASET_LENGTH = None
+VALIDATION_DATASET_LENGTH = None
 CONTINUE_TRAINING = True
 TEMP_MODEL_FILE = f"{CHECKPOINT_FOLDER}/temp_model.pt"
 LAST_TRAIN_STEP_FILE = f"{CHECKPOINT_FOLDER}/last_train_step.pkl"
@@ -144,7 +144,7 @@ if __name__ == "__main__":
                 tokenizer=tokenizer,
                 d_model=256,
                 nhead=8,
-                num_layers=4,
+                num_layers=3,
                 learning_rate=1e-3,
                 device=DEVICE,
             )
