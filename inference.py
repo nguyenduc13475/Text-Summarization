@@ -34,14 +34,14 @@ if ENV in ("colab", "notebook"):
 
 def find_latest_checkpoint(checkpoint_folder):
     if os.path.exists(checkpoint_folder) and any(
-        re.match(r"^checkpoint([1-9]\d*)\.pt$", f)
+        re.match(r"^checkpoint_([0-9]\d*)\.pt$", f)
         for f in os.listdir(checkpoint_folder)
     ):
         latest_checkpoint = max(
             (
                 int(m.group(1))
                 for f in os.listdir(checkpoint_folder)
-                if (m := re.match(r"^checkpoint([1-9]\d*)\.pt$", f))
+                if (m := re.match(r"^checkpoint_([0-9]\d*)\.pt$", f))
             )
         )
 
