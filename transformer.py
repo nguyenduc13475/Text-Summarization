@@ -206,7 +206,7 @@ class Transformer(nn.Module):
         )
         if self.device.type == "cuda":
             self.scaler = torch.amp.GradScaler()
-        self.loss_scale = 1e-2
+        self.loss_scale = 1e-3
 
     def make_padding_mask(self, batch_input_ids):
         mask = batch_input_ids.eq(self.pad_token)
