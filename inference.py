@@ -46,7 +46,7 @@ def find_latest_checkpoint(checkpoint_folder):
         )
 
         return (
-            f"{checkpoint_folder}/checkpoint{latest_checkpoint}.pt",
+            f"{checkpoint_folder}/checkpoint_{latest_checkpoint}.pt",
             latest_checkpoint,
         )
 
