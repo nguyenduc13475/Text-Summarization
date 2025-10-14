@@ -167,7 +167,7 @@ if __name__ == "__main__":
             output = model.infer(
                 input_ids,
                 max_output_length=200,
-                beam_width=2,
+                beam_width=1,
                 return_attention=ATTENTION_PLOT,
                 return_embedding=EMBEDDING_PLOT,
             )
@@ -212,7 +212,9 @@ if __name__ == "__main__":
 
                     plot_attention_heatmap(
                         axes[0],
-                        output["cross_attention_distributions"][0],
+                        output["cross_attention_distributions"][0][
+                            : len(output_tokens)
+                        ],
                         output_tokens,
                         input_tokens,
                         "Input tokens",
@@ -224,7 +226,9 @@ if __name__ == "__main__":
 
                     plot_attention_heatmap(
                         axes[1],
-                        output["decoder_attention_distributions"][0],
+                        output["decoder_attention_distributions"][0][
+                            : len(output_tokens) - 1, : len(output_tokens) - 1
+                        ],
                         output_tokens[1:],
                         output_tokens[:-1],
                         "Generated summary tokens",
