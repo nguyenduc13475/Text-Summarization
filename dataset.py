@@ -186,9 +186,11 @@ class DataLoader:
     def __iter__(self):
         self.batch_iter = iter(self.batch_sampler)
 
-        for _ in range(self.skip_batches):
+        for i in range(self.skip_batches):
             try:
                 next(self.batch_iter)
+                if i % 100 == 0:
+                    print(f"Skip batch {i}")
             except StopIteration:
                 break
 
