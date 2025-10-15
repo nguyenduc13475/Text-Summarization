@@ -211,7 +211,7 @@ class DataLoader:
     def __iter__(self):
         self.batch_iter = iter(self.batch_sampler)
 
-        for i in range(self.skip_batches):
+        for _ in range(self.skip_batches):
             try:
                 next(self.batch_iter)
             except StopIteration:

@@ -95,27 +95,32 @@ if __name__ == "__main__":
             dataset_length=VALIDATION_DATASET_LENGTH,
         ),
     }
+    train_batch_sampler = DynamicBatchSampler(
+        ds["train"],
+        max_tokens=MAX_TOKENS_EACH_BATCH,
+    )
+    validation_batch_sampler = DynamicBatchSampler(
+        ds["validation"],
+        max_tokens=MAX_TOKENS_EACH_BATCH,
+    )
     loader = {
         "train": DataLoader(
             ds["train"],
             collate_fn=collate_fn,
-            batch_sampler=DynamicBatchSampler(
-                ds["train"],
-                max_tokens=MAX_TOKENS_EACH_BATCH,
-            ),
+            batch_sampler=train_batch_sampler,
         ),
         "validation": DataLoader(
             ds["validation"],
             collate_fn=collate_fn,
-            batch_sampler=DynamicBatchSampler(
-                ds["validation"],
-                max_tokens=MAX_TOKENS_EACH_BATCH,
-            ),
+            batch_sampler=validation_batch_sampler,
         ),
     }
     # xóa đi
-    for batch_idx, batch in enumerate(loader["train"]):
-        pass
+    for batch_idx, batch in enumerate(train_batch_sampler):
+        if batch_idx % 100 == 0:
+            print(batch_idx)
+            print(len(batch))
+            print(train_batch_sampler.num_samples)
 
     match MODEL:
         case "POINTER_GENERATOR_NETWORK":
