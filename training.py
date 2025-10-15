@@ -113,6 +113,9 @@ if __name__ == "__main__":
             ),
         ),
     }
+    # xóa đi
+    for batch_idx, batch in enumerate(loader["train"]):
+        pass
 
     match MODEL:
         case "POINTER_GENERATOR_NETWORK":

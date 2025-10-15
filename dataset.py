@@ -1,13 +1,15 @@
 import math
+import os
 import random
 
 import torch
 from datasets import load_dataset
+from joblib import Memory, dump, load
 from tokenizers.implementations import ByteLevelBPETokenizer
 from torch.nn.utils.rnn import pad_sequence
 from torch.utils.data import Dataset, Sampler
 
-from utils import text_to_token_ids
+from utils import cache, text_to_token_ids
 
 
 class CNNDailyMailDataset(Dataset):
@@ -24,6 +26,7 @@ class CNNDailyMailDataset(Dataset):
     ):
         super().__init__()
         self.tokenizer = tokenizer
+        self.split = split
         if tokenizer is not None:
             self.vocab_size = self.tokenizer.get_vocab_size()
 
@@ -66,12 +69,17 @@ class CNNDailyMailDataset(Dataset):
         else:
             self.ds = full_ds
 
-        self.indices, self.lengths = zip(
-            *sorted(
-                enumerate([len(sample["article"]) for sample in self.ds]),
-                key=lambda x: x[1],
-                reverse=True,
-            )
+        self.indices, self.lengths = cache(
+            lambda: list(
+                zip(
+                    *sorted(
+                        enumerate([len(sample["article"]) for sample in self.ds]),
+                        key=lambda x: x[1],
+                        reverse=True,
+                    )
+                )
+            ),
+            f"{split}_sorted_indices.pkl",
         )
 
     def __len__(self):
@@ -106,13 +114,28 @@ class DynamicBatchSampler(Sampler):
     def __init__(self, dataset, max_tokens=10000):
         self.dataset = dataset
         self.max_tokens = max_tokens
+        os.makedirs("cache", exist_ok=True)
+        self.cache_batches_file = f"cache/{dataset.split}_batches.pkl"
+        if os.path.exists(self.cache_batches_file):
+            self.batches, self.num_samples = load(self.cache_batches_file)
+        else:
+            self.batches = []
+            self.num_samples = 0
+
+    def update_batches(self, batch):
+        self.batches.append(batch)
+        self.num_samples += len(batch)
+        dump((self.batches, self.num_samples), self.cache_batches_file)
 
     def __iter__(self):
         batch = []
         max_input_length = 0
         max_target_length = 0
 
-        for idx in self.dataset.indices:
+        for batch in self.batches:
+            yield batch
+
+        for idx in self.dataset.indices[self.num_samples :]:
             input_length = len(self.dataset[idx]["input_ids"])
             target_length = len(self.dataset[idx]["target_ids"])
             if target_length > input_length * 0.3:
@@ -125,6 +148,7 @@ class DynamicBatchSampler(Sampler):
                 proj_max_input * (len(batch) + 1) > self.max_tokens
                 or proj_max_target * (len(batch) + 1) > self.max_tokens * 0.1
             ):
+                self.update_batches(batch)
                 yield batch
                 batch = []
                 max_input_length = 0
@@ -135,6 +159,7 @@ class DynamicBatchSampler(Sampler):
             max_target_length = max(max_target_length, target_length)
 
         if batch:
+            self.update_batches(batch)
             yield batch
 
     def __len__(self):
@@ -189,8 +214,6 @@ class DataLoader:
         for i in range(self.skip_batches):
             try:
                 next(self.batch_iter)
-                if i % 100 == 0:
-                    print(f"Skip batch {i}")
             except StopIteration:
                 break
 

@@ -1,3 +1,5 @@
+import os
+import pickle
 import random
 
 import numpy as np
@@ -109,3 +111,16 @@ def load_checkpoint(model, checkpoint_file, map_location="cpu"):
     checkpoint = torch.load(checkpoint_file, map_location=map_location)
     model.load_state_dict(checkpoint["model_state_dict"])
     model.optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
+
+
+def cache(func, name):
+    cache_file = f"cache/{name}"
+    if os.path.exists(cache_file):
+        with open(cache_file, "rb") as f:
+            return pickle.load(f)
+    else:
+        os.makedirs("cache", exist_ok=True)
+        result = func()
+        with open(cache_file, "wb") as f:
+            pickle.dump(result, f)
+        return result
