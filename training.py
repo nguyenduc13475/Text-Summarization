@@ -115,12 +115,11 @@ if __name__ == "__main__":
             batch_sampler=validation_batch_sampler,
         ),
     }
-    # xóa đi
-    for batch_idx, batch in enumerate(train_batch_sampler):
-        if batch_idx % 100 == 0:
-            print(batch_idx)
-            print(len(batch))
-            print(train_batch_sampler.num_samples)
+
+    for i, b in enumerate(train_batch_sampler):
+        if i % 100 == 0:
+            print(i)
+            print(len(b))
 
     a = None * 2
 

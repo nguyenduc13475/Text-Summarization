@@ -1,10 +1,9 @@
 import math
 import os
-import random
 
+import joblib
 import torch
 from datasets import load_dataset
-from joblib import Memory, dump, load
 from tokenizers.implementations import ByteLevelBPETokenizer
 from torch.nn.utils.rnn import pad_sequence
 from torch.utils.data import Dataset, Sampler
@@ -117,33 +116,33 @@ class DynamicBatchSampler(Sampler):
         os.makedirs("cache", exist_ok=True)
         self.cache_batches_file = f"cache/{dataset.split}_batches.pkl"
         if os.path.exists(self.cache_batches_file):
-            self.batches, self.num_samples = load(self.cache_batches_file)
+            self.batches, self.start_idx = joblib.load(self.cache_batches_file)
+            num_samples = sum([len(batch) for batch in self.batches])
             print(
-                f"Load batch indices successfully! ({self.num_samples} samples, {len(self.batches)} batches)"
+                f"Load {dataset.split} batch indices successfully! ({num_samples} samples, {len(self.batches)} batches, continue at index {self.start_idx})"
             )
         else:
             self.batches = []
-            self.num_samples = 0
+            self.start_idx = 0
 
-    def update_batches(self, batch):
-        self.batches.append(batch)
-        self.num_samples += len(batch)
-        dump((self.batches, self.num_samples), self.cache_batches_file)
+    def update_batches(self, start_idx):
+        joblib.dump((self.batches, start_idx), self.cache_batches_file)
         if os.path.exists("/content/drive/MyDrive"):
-            dump(
-                (self.batches, self.num_samples),
+            joblib.dump(
+                (self.batches, start_idx),
                 f"/content/drive/MyDrive/{self.dataset.split}_batches.pkl",
             )
 
     def __iter__(self):
-        batch = []
         max_input_length = 0
         max_target_length = 0
 
         for batch in self.batches:
             yield batch
 
-        for idx in self.dataset.indices[self.num_samples :]:
+        batch = []
+        update_interval = -1
+        for i, idx in enumerate(self.dataset.indices[self.start_idx :]):
             input_length = len(self.dataset[idx]["input_ids"])
             target_length = len(self.dataset[idx]["target_ids"])
             if target_length > input_length * 0.3:
@@ -156,7 +155,10 @@ class DynamicBatchSampler(Sampler):
                 proj_max_input * (len(batch) + 1) > self.max_tokens
                 or proj_max_target * (len(batch) + 1) > self.max_tokens * 0.1
             ):
-                self.update_batches(batch)
+                self.batches.append(batch)
+                if i > update_interval:
+                    self.update_batches(self.start_idx + i)
+                    update_interval += 100
                 yield batch
                 batch = []
                 max_input_length = 0
@@ -167,7 +169,8 @@ class DynamicBatchSampler(Sampler):
             max_target_length = max(max_target_length, target_length)
 
         if batch:
-            self.update_batches(batch)
+            self.batches.append(batch)
+            self.update_batches(len(self.dataset.indices))
             yield batch
 
     def __len__(self):
