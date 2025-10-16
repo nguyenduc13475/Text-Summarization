@@ -517,14 +517,24 @@ import pickle
 
 with open("cache/train_batches.pkl", "rb") as f:
     a, b = pickle.load(f)
-    # a = a[:32361]
-    # with open("cache/train_batches2.pkl", "wb") as f2:
-    #     pickle.dump((a, sum([len(x) for x in a])), f2)
-    flat_A = [y for x in a for y in x]
-    flat_A = flat_A[:264000]
-    print(flat_A[-1])
-    print(flat_A.__len__())
-    print(set(flat_A).__len__())
-    # 71349
-    # print([i for i, x in enumerate(a) for y in x if y == 71349])
-    # 32361
+    a = a[:32361]
+    #     print(a[32360][-1])
+    with open("cache/train_batches2.pkl", "wb") as f2:
+        pickle.dump((a, 264229), f2)
+#     flat_A = [y for x in a for y in x]
+#     # flat_A = flat_A[263993]
+#     print(len(flat_A))
+#     print(len(set(flat_A)))
+#     print(flat_A.index(256466))
+#     71349
+#     print([i for i, x in enumerate(a) for y in x if y == 256466])
+#     32361
+#     256466
+#     32341
+#     263759
+#     19868 tìm index của nó trong indices + 1 => gán b
+# 264229
+
+# with open("cache/train_sorted_indices.pkl", "rb") as f:
+#     a = pickle.load(f)
+#     print(a[0].index(19868))
