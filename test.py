@@ -515,16 +515,17 @@
 # print(memory.cache(lambda: (print("Computing..."), 9)[1])())
 import pickle
 
-with open("cache/train_batches.pkl", "rb") as f:
+with open("cache/validation_batches.pkl", "rb") as f:
     a, b = pickle.load(f)
-    a = a[:32361]
+    # a = a[:32361]
     #     print(a[32360][-1])
-    with open("cache/train_batches2.pkl", "wb") as f2:
-        pickle.dump((a, 264229), f2)
-#     flat_A = [y for x in a for y in x]
-#     # flat_A = flat_A[263993]
-#     print(len(flat_A))
-#     print(len(set(flat_A)))
+    # with open("cache/train_batches2.pkl", "wb") as f2:
+    # pickle.dump((a, 264229), f2)
+    flat_A = [y for x in a for y in x]
+    #     # flat_A = flat_A[263993]
+    print(len(flat_A))
+    print(len(set(flat_A)))
+    print(b)
 #     print(flat_A.index(256466))
 #     71349
 #     print([i for i, x in enumerate(a) for y in x if y == 256466])

@@ -116,13 +116,6 @@ if __name__ == "__main__":
         ),
     }
 
-    for i, b in enumerate(train_batch_sampler):
-        if i % 100 == 0:
-            print(i)
-            print(len(b))
-
-    a = None * 2
-
     match MODEL:
         case "POINTER_GENERATOR_NETWORK":
             model = PointerGeneratorNetwork(
