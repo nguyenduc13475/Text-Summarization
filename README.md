@@ -97,6 +97,11 @@ python checkpoint_validation.py
 python text_rank.py
 ```
 
+### 8. Xóa training cache
+```bash
+rmdir /s /q cache
+```
+
 ---
 
 ## ⚙️ Nền tảng chạy

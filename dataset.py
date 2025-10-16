@@ -118,6 +118,7 @@ class DynamicBatchSampler(Sampler):
         self.cache_batches_file = f"cache/{dataset.split}_batches.pkl"
         if os.path.exists(self.cache_batches_file):
             self.batches, self.num_samples = load(self.cache_batches_file)
+            print("Load batch indices successfully!")
         else:
             self.batches = []
             self.num_samples = 0
@@ -129,7 +130,7 @@ class DynamicBatchSampler(Sampler):
         if os.path.exists("/content/drive/MyDrive"):
             dump(
                 (self.batches, self.num_samples),
-                f"/content/drive/MyDrive/{self.dataset.split}_batches_pkl",
+                f"/content/drive/MyDrive/{self.dataset.split}_batches.pkl",
             )
 
     def __iter__(self):
