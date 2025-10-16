@@ -118,7 +118,9 @@ class DynamicBatchSampler(Sampler):
         self.cache_batches_file = f"cache/{dataset.split}_batches.pkl"
         if os.path.exists(self.cache_batches_file):
             self.batches, self.num_samples = load(self.cache_batches_file)
-            print("Load batch indices successfully!")
+            print(
+                f"Load batch indices successfully! ({self.num_samples} samples, {len(self.batches)} batches)"
+            )
         else:
             self.batches = []
             self.num_samples = 0
