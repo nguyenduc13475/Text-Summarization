@@ -2,6 +2,7 @@ import math
 import os
 
 import joblib
+import requests
 import torch
 from datasets import load_dataset
 from tokenizers.implementations import ByteLevelBPETokenizer
@@ -9,6 +10,55 @@ from torch.nn.utils.rnn import pad_sequence
 from torch.utils.data import Dataset, Sampler
 
 from utils import cache, text_to_token_ids
+
+
+def load_dataset_manual():
+    cache_dir = os.path.expanduser(
+        "~/.cache/huggingface/datasets/abisee__cnn_dailymail/3.0.0"
+    )
+    os.makedirs(cache_dir, exist_ok=True)
+
+    parquet_files = {
+        "train": [
+            "https://huggingface.co/datasets/abisee/cnn_dailymail/resolve/main/3.0.0/train-00000-of-00003.parquet",
+            "https://huggingface.co/datasets/abisee/cnn_dailymail/resolve/main/3.0.0/train-00001-of-00003.parquet",
+            "https://huggingface.co/datasets/abisee/cnn_dailymail/resolve/main/3.0.0/train-00002-of-00003.parquet",
+        ],
+        "validation": [
+            "https://huggingface.co/datasets/abisee/cnn_dailymail/resolve/main/3.0.0/validation-00000-of-00001.parquet"
+        ],
+        "test": [
+            "https://huggingface.co/datasets/abisee/cnn_dailymail/resolve/main/3.0.0/test-00000-of-00001.parquet"
+        ],
+    }
+
+    def download_file(url, save_dir):
+        local_path = os.path.join(save_dir, os.path.basename(url))
+        if not os.path.exists(local_path):
+            print(f"Downloading {url} ...")
+            r = requests.get(url, stream=True)
+            r.raise_for_status()
+            with open(local_path, "wb") as f:
+                for chunk in r.iter_content(chunk_size=8192):
+                    f.write(chunk)
+        else:
+            print(f"{local_path} already exists, skipping download.")
+        return local_path
+
+    local_files = {}
+    for split, urls in parquet_files.items():
+        local_files[split] = [download_file(u, cache_dir) for u in urls]
+
+    dataset = load_dataset(
+        "parquet",
+        data_files={
+            "train": local_files["train"],
+            "validation": local_files["validation"],
+            "test": local_files["test"],
+        },
+    )
+
+    return dataset
 
 
 class CNNDailyMailDataset(Dataset):
@@ -31,9 +81,15 @@ class CNNDailyMailDataset(Dataset):
 
         if split in ["train", "cross validation", "test", "validation"]:
             if CNNDailyMailDataset.full_ds is None:
-                CNNDailyMailDataset.full_ds = load_dataset(
-                    "abisee/cnn_dailymail", "3.0.0"
-                )
+                try:
+                    CNNDailyMailDataset.full_ds = load_dataset(
+                        "abisee/cnn_dailymail", "3.0.0"
+                    )
+                except:
+                    print(
+                        "Failed to retrieve the dataset through the API, initiating direct HTTPS download as a fallback."
+                    )
+                    CNNDailyMailDataset.full_ds = load_dataset_manual()
 
         full_ds = CNNDailyMailDataset.full_ds
 
