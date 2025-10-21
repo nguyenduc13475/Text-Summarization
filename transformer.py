@@ -249,7 +249,7 @@ class Transformer(nn.Module):
 
         loss_fn = nn.CrossEntropyLoss(
             ignore_index=self.pad_token - self.end_token,
-            label_smoothing=0.1,
+            label_smoothing=0.0,
             reduction="sum",
         )
         loss = loss_fn(logits, targets)
