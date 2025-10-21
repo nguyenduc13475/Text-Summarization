@@ -19,8 +19,8 @@ from utils import load_checkpoint, text_to_token_ids, token_ids_to_text
 MODELS = [
     # "TEXT_RANK",
     # "POINTER_GENERATOR_NETWORK",
-    "NEURAL_INTRA_ATTENTION_MODEL",
-    # "TRANSFORMER",
+    # "NEURAL_INTRA_ATTENTION_MODEL",
+    "TRANSFORMER",
 ]
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 ENV = detect_runtime_env()

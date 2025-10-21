@@ -290,6 +290,10 @@ class Transformer(nn.Module):
     ):
         self.eval()
         with torch.no_grad():
+            if not isinstance(batch_input_ids, torch.Tensor):
+                batch_input_ids = torch.tensor(
+                    batch_input_ids, device=self.device, dtype=torch.long
+                )
             batch_input_ids = batch_input_ids.to(self.device)
             beam_width = min(beam_width, self.vocab_size)
 
