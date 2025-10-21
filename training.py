@@ -35,7 +35,7 @@ DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 LOSS_LOG_MODE = "graph"
 LOSS_LOG_INTERVAL = 10
 ENV = detect_runtime_env()
-MODEL_SAVE_INTERVAL = 10
+MODEL_SAVE_INTERVAL = 50
 
 if ENV in ("colab", "notebook"):
     from IPython.display import clear_output, display
