@@ -1,10 +1,35 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+import torch.nn.init as init
 import torch.optim as optim
 
 from beam_search import BeamSearch
 from utils import tensor_dict_to_scalar
+
+
+def init_weights(m):
+    if isinstance(m, nn.Embedding):
+        init.uniform_(m.weight, -0.1, 0.1)
+
+    elif isinstance(m, nn.Linear):
+        init.xavier_uniform_(m.weight)
+        if m.bias is not None:
+            init.zeros_(m.bias)
+
+    elif isinstance(m, nn.MultiheadAttention):
+        if m.in_proj_weight is not None:
+            init.xavier_uniform_(m.in_proj_weight)
+        if m.out_proj.weight is not None:
+            init.xavier_uniform_(m.out_proj.weight)
+        if m.in_proj_bias is not None:
+            init.zeros_(m.in_proj_bias)
+        if m.out_proj.bias is not None:
+            init.zeros_(m.out_proj.bias)
+
+    elif isinstance(m, nn.LayerNorm):
+        init.ones_(m.weight)
+        init.zeros_(m.bias)
 
 
 class EmbeddingLayer(nn.Module):
@@ -200,6 +225,7 @@ class Transformer(nn.Module):
         self.out_proj = nn.Linear(d_model, self.vocab_size - self.end_token)
         self.device = torch.device(device)
 
+        self.apply(init_weights)
         self.to(device)
         self.optimizer = optim.Adam(
             self.parameters(), lr=learning_rate, weight_decay=1e-5
