@@ -201,7 +201,7 @@ class Transformer(nn.Module):
         self.device = torch.device(device)
 
         self.to(device)
-        self.optimizer = optim.Adam(
+        self.optimizer = optim.AdamW(
             self.parameters(), lr=learning_rate, weight_decay=1e-5
         )
         if self.device.type == "cuda":
