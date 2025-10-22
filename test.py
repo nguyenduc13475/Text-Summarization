@@ -525,7 +525,7 @@ with open("cache/train_batches.pkl", "rb") as f:
     #     # flat_A = flat_A[263993]
     # print(len(flat_A))
     # print(len(set(flat_A)))
-    print(a[0])
+    print(len(a))
 #     print(flat_A.index(256466))
 #     71349
 #     print([i for i, x in enumerate(a) for y in x if y == 256466])
