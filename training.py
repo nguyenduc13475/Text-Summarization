@@ -149,9 +149,8 @@ if __name__ == "__main__":
         case "TRANSFORMER":
             model = Transformer(
                 tokenizer=tokenizer,
-                d_model=256,
-                bottle_neck_dim=512,
-                nhead=1,
+                d_model=512,
+                nhead=8,
                 num_layers=3,
                 learning_rate=1e-3,
                 device=DEVICE,
