@@ -53,7 +53,7 @@ class EmbeddingLayer(nn.Module):
         return pos_encoding
 
     def forward(self, input_ids):
-        return self.embedding(input_ids) + 0.01 * self.positional_encoding(
+        return self.embedding(input_ids) + 0.1 * self.positional_encoding(
             input_ids.shape[-1], self.embedding_dim
         ).to(input_ids.device)
 
