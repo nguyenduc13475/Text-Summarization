@@ -441,7 +441,6 @@ class NeuralIntraAttentionModel(nn.Module):
 
             if is_cuda:
                 self.scaler.scale(nll_loss * self.loss_scale).backward()
-                self.scaler.unscale_(self.optimizer)
                 self.scaler.step(self.optimizer)
                 self.scaler.update()
             else:
@@ -464,7 +463,6 @@ class NeuralIntraAttentionModel(nn.Module):
                     self.scaler.scale(
                         rl_loss * self.loss_scale * self.rl_loss_factor
                     ).backward()
-                    self.scaler.unscale_(self.optimizer)
                     self.scaler.step(self.optimizer)
                     self.scaler.update()
                 else:

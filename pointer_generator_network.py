@@ -244,7 +244,6 @@ class PointerGeneratorNetwork(nn.Module):
                     target_lengths,
                 )
             self.scaler.scale(losses["total_loss"] * self.loss_scale).backward()
-            self.scaler.unscale_(self.optimizer)
             self.scaler.step(self.optimizer)
             self.scaler.update()
         else:

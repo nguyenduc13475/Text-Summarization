@@ -181,7 +181,7 @@ class Transformer(nn.Module):
         tokenizer,
         d_model=256,
         nhead=8,
-        num_layers=4,
+        num_layers=3,
         learning_rate=1e-3,
         device="cpu",
     ):
@@ -201,16 +201,12 @@ class Transformer(nn.Module):
         self.device = torch.device(device)
 
         self.to(device)
-        self.optimizer = optim.AdamW(
+        self.optimizer = optim.Adam(
             self.parameters(), lr=learning_rate, weight_decay=1e-5
         )
         if self.device.type == "cuda":
             self.scaler = torch.amp.GradScaler()
         self.loss_scale = 1e-3
-
-    def make_padding_mask(self, batch_input_ids):
-        mask = batch_input_ids.eq(self.pad_token)
-        return mask.float().masked_fill(mask, float("-inf"))
 
     def compute_loss(self, batch_input_ids, batch_target_ids):
         batch_input_ids = batch_input_ids.to(self.device)
@@ -231,8 +227,8 @@ class Transformer(nn.Module):
         causal_mask = nn.Transformer.generate_square_subsequent_mask(
             max_target_length
         ).to(self.device)
-        input_padding_mask = self.make_padding_mask(batch_input_ids)
-        current_token_padding_mask = self.make_padding_mask(batch_current_tokens)
+        input_padding_mask = batch_input_ids == self.pad_token
+        current_token_padding_mask = batch_current_tokens == self.pad_token
 
         decoder_outputs = self.transformer(
             batch_input_embeddings,
@@ -243,16 +239,17 @@ class Transformer(nn.Module):
             memory_key_padding_mask=input_padding_mask,
         )
 
-        logits = self.out_proj(decoder_outputs)
-        logits = logits.reshape(-1, logits.shape[-1])
-        targets = batch_target_ids.reshape(-1) - self.end_token
-
-        loss_fn = nn.CrossEntropyLoss(
-            ignore_index=self.pad_token - self.end_token,
-            label_smoothing=0.0,
-            reduction="sum",
+        batch_vocab_distributions = F.pad(
+            F.softmax(self.out_proj(decoder_outputs), dim=-1),
+            (self.end_token, 0),
         )
-        loss = loss_fn(logits, targets)
+        batch_log_probs = torch.log(batch_vocab_distributions + 1e-9).view(
+            batch_size * max_target_length, -1
+        )
+        token_log_probs = batch_log_probs[
+            torch.arange(batch_size * max_target_length), batch_target_ids.view(-1)
+        ][batch_target_ids.view(-1) != self.pad_token]
+        loss = -token_log_probs.sum()
 
         return {"total_loss": loss}
 
@@ -264,7 +261,6 @@ class Transformer(nn.Module):
             with torch.amp.autocast(device_type="cuda"):
                 losses = self.compute_loss(batch_input_ids, batch_target_ids)
             self.scaler.scale(losses["total_loss"] * self.loss_scale).backward()
-            self.scaler.unscale_(self.optimizer)
             self.scaler.step(self.optimizer)
             self.scaler.update()
         else:
@@ -307,7 +303,7 @@ class Transformer(nn.Module):
 
             batch_input_embeddings = self.embedding_layer(batch_input_ids)
 
-            input_padding_mask = self.make_padding_mask(batch_input_ids)
+            input_padding_mask = batch_input_ids == self.pad_token
 
             start_token = torch.tensor([self.start_token], device=self.device)
             start_embedding = self.embedding_layer(start_token).unsqueeze(1)
