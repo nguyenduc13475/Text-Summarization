@@ -236,7 +236,7 @@ if __name__ == "__main__":
                     raw_batch_loss_history[loss_type].append(loss_value)
 
                 if split == "train" and batch_idx % LOSS_LOG_INTERVAL == 0:
-                    print(f"{num_samples}/{len(ds['train'])} samples")
+                    print(f"{num_samples} samples")
                     average_loss_per_token = losses["total_loss"] / batch_num_tokens
                     log = f"Epoch {epoch} / Batch {batch_idx} : Average Loss Per Token is {average_loss_per_token}"
                     match LOSS_LOG_MODE:
@@ -307,9 +307,7 @@ if __name__ == "__main__":
                     print("Model saved successfully!")
 
                 if split == "validation":
-                    print(
-                        f"Validated {num_samples}/{VALIDATION_DATASET_LENGTH if VALIDATION_DATASET_LENGTH is not None else len(ds['validation'])} samples"
-                    )
+                    print(f"Validated {num_samples} samples")
 
                 torch.cuda.empty_cache()
 
