@@ -71,7 +71,6 @@ class CNNDailyMailDataset(Dataset):
         fold=None,
         num_folds=None,
         dataset=None,
-        dataset_length=None,
     ):
         super().__init__()
         self.tokenizer = tokenizer
@@ -105,9 +104,6 @@ class CNNDailyMailDataset(Dataset):
                     full_ds = dataset
                 else:
                     raise ValueError("at least split or dataset must be valid!")
-
-        if dataset_length is not None:
-            full_ds = full_ds.select(range(dataset_length))
 
         if fold is not None and num_folds is not None:
             total_size = len(full_ds)
@@ -166,67 +162,60 @@ class CNNDailyMailDataset(Dataset):
 
 
 class DynamicBatchSampler(Sampler):
-    def __init__(self, dataset, max_tokens=10000):
+    def __init__(self, dataset, max_tokens=10000, batch_nums=None, start_batch=0):
         self.dataset = dataset
-        self.max_tokens = max_tokens
         os.makedirs("cache", exist_ok=True)
         self.cache_batches_file = f"cache/{dataset.split}_batches.pkl"
         if os.path.exists(self.cache_batches_file):
-            self.batches, self.start_idx = joblib.load(self.cache_batches_file)
-            num_samples = sum([len(batch) for batch in self.batches])
-            print(
-                f"Load {dataset.split} batch indices successfully! ({num_samples} samples, {len(self.batches)} batches, continue at index {self.start_idx})"
-            )
+            self.batches = joblib.load(self.cache_batches_file)
+            print(f"Load {dataset.split} batch indices successfully!")
         else:
+            max_input_length = 0
+            max_target_length = 0
+            update_threshold = -1
             self.batches = []
-            self.start_idx = 0
+            batch = []
 
-    def update_batches(self, start_idx):
-        joblib.dump((self.batches, start_idx), self.cache_batches_file)
+            for i, idx in enumerate(self.dataset.indices):
+                input_length = len(self.dataset[idx]["input_ids"])
+                target_length = len(self.dataset[idx]["target_ids"])
+                if target_length > input_length * 0.3:
+                    continue
+
+                max_input_length = max(max_input_length, input_length)
+                max_target_length = max(max_target_length, target_length)
+
+                if batch and (
+                    max_input_length * (len(batch) + 1) > max_tokens
+                    or max_target_length * (len(batch) + 1) > max_tokens * 0.1
+                ):
+                    self.batches.append(batch)
+                    if i > update_threshold:
+                        self.update_batches()
+                        update_threshold += 100
+                    batch = [idx]
+                    max_input_length = input_length
+                    max_target_length = target_length
+                else:
+                    batch.append(idx)
+
+            if batch:
+                self.batches.append(batch)
+                self.update_batches()
+
+        if batch_nums is not None:
+            self.batches = self.batches[start_batch : start_batch + batch_nums]
+
+    def update_batches(self):
+        joblib.dump(self.batches, self.cache_batches_file)
         if os.path.exists("/content/drive/MyDrive"):
             joblib.dump(
-                (self.batches, start_idx),
+                self.batches,
                 f"/content/drive/MyDrive/{self.dataset.split}_batches.pkl",
             )
 
     def __iter__(self):
-        max_input_length = 0
-        max_target_length = 0
-
         for batch in self.batches:
-            yield batch
-
-        batch = []
-        update_interval = -1
-        for i, idx in enumerate(self.dataset.indices[self.start_idx :]):
-            input_length = len(self.dataset[idx]["input_ids"])
-            target_length = len(self.dataset[idx]["target_ids"])
-            if target_length > input_length * 0.3:
-                continue
-
-            proj_max_input = max(max_input_length, input_length)
-            proj_max_target = max(max_target_length, target_length)
-
-            if batch and (
-                proj_max_input * (len(batch) + 1) > self.max_tokens
-                or proj_max_target * (len(batch) + 1) > self.max_tokens * 0.1
-            ):
-                self.batches.append(batch)
-                if i > update_interval:
-                    self.update_batches(self.start_idx + i)
-                    update_interval += 100
-                yield batch
-                batch = []
-                max_input_length = 0
-                max_target_length = 0
-
-            batch.append(idx)
-            max_input_length = max(max_input_length, input_length)
-            max_target_length = max(max_target_length, target_length)
-
-        if batch:
-            self.batches.append(batch)
-            self.update_batches(len(self.dataset.indices))
             yield batch
 
     def __len__(self):

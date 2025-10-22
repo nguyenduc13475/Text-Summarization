@@ -26,8 +26,10 @@ MODEL = "TRANSFORMER"
 CHECKPOINT_FOLDER = f"{MODEL.lower()}_checkpoints"
 NUM_EPOCHS = 200
 MAX_TOKENS_EACH_BATCH = 10000
-TRAIN_DATASET_LENGTH = None
-VALIDATION_DATASET_LENGTH = None
+TRAIN_BATCH_NUMS = 1000
+TRAIN_START_BATCH = 0
+VALIDATION_BATCH_NUMS = 10
+VALIDATION_START_BATCH = 0
 CONTINUE_TRAINING = True
 TEMP_MODEL_FILE = f"{CHECKPOINT_FOLDER}/temp_model.pt"
 LAST_TRAIN_STEP_FILE = f"{CHECKPOINT_FOLDER}/last_train_step.pkl"
@@ -36,6 +38,7 @@ LOSS_LOG_MODE = "graph"
 LOSS_LOG_INTERVAL = 10
 ENV = detect_runtime_env()
 MODEL_SAVE_INTERVAL = 50
+SAVE_CHECKPOINT = False
 
 if ENV in ("colab", "notebook"):
     from IPython.display import clear_output, display
@@ -87,21 +90,23 @@ if __name__ == "__main__":
         "train": CNNDailyMailDataset(
             split="train",
             tokenizer=tokenizer,
-            dataset_length=TRAIN_DATASET_LENGTH,
         ),
         "validation": CNNDailyMailDataset(
             split="validation",
             tokenizer=tokenizer,
-            dataset_length=VALIDATION_DATASET_LENGTH,
         ),
     }
     train_batch_sampler = DynamicBatchSampler(
         ds["train"],
         max_tokens=MAX_TOKENS_EACH_BATCH,
+        batch_nums=TRAIN_BATCH_NUMS,
+        start_batch=TRAIN_START_BATCH,
     )
     validation_batch_sampler = DynamicBatchSampler(
         ds["validation"],
         max_tokens=MAX_TOKENS_EACH_BATCH,
+        batch_nums=VALIDATION_BATCH_NUMS,
+        start_batch=VALIDATION_START_BATCH,
     )
     loader = {
         "train": DataLoader(
@@ -345,7 +350,7 @@ if __name__ == "__main__":
                         clear_output(wait=True)
                         display(figure)
 
-            if split == "train":
+            if split == "train" and SAVE_CHECKPOINT:
                 save_checkpoint(model, f"{CHECKPOINT_FOLDER}/checkpoint_{epoch}.pt")
                 if ENV == "colab" and os.path.exists("/content/drive/MyDrive"):
                     save_checkpoint(
