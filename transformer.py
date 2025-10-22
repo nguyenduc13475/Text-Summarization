@@ -180,6 +180,7 @@ class Transformer(nn.Module):
         self,
         tokenizer,
         d_model=256,
+        bottle_neck_dim=512,
         nhead=8,
         num_layers=3,
         learning_rate=1e-3,
@@ -197,12 +198,35 @@ class Transformer(nn.Module):
         self.transformer = SimpleTransformer(
             d_model=d_model, nhead=nhead, num_layers=num_layers, dropout=0
         )
-        self.out_proj = nn.Linear(d_model, self.vocab_size - self.end_token)
+        self.out_proj_1 = nn.Linear(d_model, bottle_neck_dim)
+        self.bottle_neck_activation = nn.ReLU()
+        self.out_proj_2 = nn.Linear(bottle_neck_dim, self.vocab_size - self.end_token)
         self.device = torch.device(device)
 
         self.to(device)
-        self.optimizer = optim.Adam(
-            self.parameters(), lr=learning_rate, weight_decay=1e-5
+        no_decay = ["bias", "LayerNorm.weight"]
+        optimizer_grouped_parameters = [
+            {
+                "params": [
+                    p
+                    for n, p in self.named_parameters()
+                    if not any(nd in n for nd in no_decay)
+                ],
+                "weight_decay": 1e-5,
+            },
+            {
+                "params": [
+                    p
+                    for n, p in self.named_parameters()
+                    if any(nd in n for nd in no_decay)
+                ],
+                "weight_decay": 0.0,
+            },
+        ]
+
+        self.optimizer = optim.AdamW(
+            optimizer_grouped_parameters,
+            lr=learning_rate,
         )
         if self.device.type == "cuda":
             self.scaler = torch.amp.GradScaler()
@@ -240,7 +264,12 @@ class Transformer(nn.Module):
         )
 
         batch_vocab_distributions = F.pad(
-            F.softmax(self.out_proj(decoder_outputs), dim=-1),
+            F.softmax(
+                self.out_proj_2(
+                    self.bottle_neck_activation(self.out_proj_1(decoder_outputs))
+                ),
+                dim=-1,
+            ),
             (self.end_token, 0),
         )
         batch_log_probs = torch.log(batch_vocab_distributions + 1e-9).view(
@@ -318,7 +347,12 @@ class Transformer(nn.Module):
             )[:, -1, :]
 
             vocab_distributions = F.pad(
-                F.softmax(self.out_proj(decoder_outputs), dim=1),
+                F.softmax(
+                    self.out_proj_2(
+                        self.bottle_neck_activation(self.out_proj_1(decoder_outputs))
+                    ),
+                    dim=-1,
+                ),
                 (self.end_token, 0),
             )
 
@@ -346,7 +380,14 @@ class Transformer(nn.Module):
                 )[:, -1, :]
 
                 vocab_distributions = F.pad(
-                    F.softmax(self.out_proj(decoder_outputs), dim=1),
+                    F.softmax(
+                        self.out_proj_2(
+                            self.bottle_neck_activation(
+                                self.out_proj_1(decoder_outputs)
+                            )
+                        ),
+                        dim=-1,
+                    ),
                     (self.end_token, 0),
                 )
                 chosen_tokens, chosen_beam_indices = beam_search.advance(

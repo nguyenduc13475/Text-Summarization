@@ -150,6 +150,7 @@ if __name__ == "__main__":
             model = Transformer(
                 tokenizer=tokenizer,
                 d_model=256,
+                bottle_neck_dim=512,
                 nhead=8,
                 num_layers=3,
                 learning_rate=1e-3,
