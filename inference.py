@@ -151,9 +151,9 @@ if __name__ == "__main__":
                 model = Transformer(
                     tokenizer=tokenizer,
                     d_model=256,
-                    nhead=8,
+                    nhead=2,
                     num_layers=3,
-                    learning_rate=1e-3,
+                    learning_rate=1e-4,
                     device=DEVICE,
                 )
 
@@ -171,7 +171,7 @@ if __name__ == "__main__":
 
             output = model.infer(
                 input_ids,
-                max_output_length=200,
+                max_output_length=100,
                 beam_width=1,
                 return_attention=ATTENTION_PLOT,
                 return_embedding=EMBEDDING_PLOT,

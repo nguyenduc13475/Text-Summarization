@@ -370,9 +370,14 @@ class Transformer(nn.Module):
             input_padding_mask = input_padding_mask.repeat_interleave(beam_width, dim=0)
 
             for _ in range(2, max_output_length + 1):
+                tgt_mask = nn.Transformer.generate_square_subsequent_mask(
+                    batch_current_output_embeddings.shape[1]
+                ).to(self.device)
+
                 decoder_outputs = self.transformer(
                     beam_input_embeddings,
                     batch_current_output_embeddings,
+                    tgt_mask=tgt_mask,
                     src_key_padding_mask=input_padding_mask,
                     memory_key_padding_mask=input_padding_mask,
                 )[:, -1, :]
