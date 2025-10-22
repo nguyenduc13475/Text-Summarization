@@ -181,7 +181,7 @@ class Transformer(nn.Module):
         tokenizer,
         d_model=256,
         nhead=8,
-        num_layers=3,
+        num_layers=4,
         learning_rate=1e-3,
         device="cpu",
     ):
