@@ -149,7 +149,7 @@ if __name__ == "__main__":
         case "TRANSFORMER":
             model = Transformer(
                 tokenizer=tokenizer,
-                d_model=512,
+                d_model=256,
                 nhead=2,
                 num_layers=3,
                 learning_rate=1e-4,
