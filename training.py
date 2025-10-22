@@ -150,9 +150,9 @@ if __name__ == "__main__":
             model = Transformer(
                 tokenizer=tokenizer,
                 d_model=512,
-                nhead=8,
+                nhead=2,
                 num_layers=3,
-                learning_rate=1e-3,
+                learning_rate=1e-4,
                 device=DEVICE,
             )
 

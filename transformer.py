@@ -205,9 +205,9 @@ class Transformer(nn.Module):
         self,
         tokenizer,
         d_model=512,
-        nhead=8,
+        nhead=2,
         num_layers=3,
-        learning_rate=1e-3,
+        learning_rate=1e-4,
         device="cpu",
     ):
         super().__init__()
