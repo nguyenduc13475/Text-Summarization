@@ -143,6 +143,7 @@ class TransformerTokenizer:
     def __init__(self, vocab, merges):
         if os.path.exists(vocab) and os.path.exists(merges):
             self.tokenizer = ByteLevelBPETokenizer(vocab, merges)
+            self.tokenizer.add_special_tokens(["<pad>", "<unk>", "<s>", "</s>"])
         else:
             ds = load_dataset("abisee/cnn_dailymail", "3.0.0")["train"]
             texts = [sample["article"] + " " + sample["highlights"] for sample in ds]
