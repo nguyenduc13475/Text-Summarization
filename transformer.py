@@ -310,6 +310,7 @@ class Transformer(nn.Module):
         batch_input_ids,
         max_output_length=100,
         beam_width=1,
+        trigram_penalty=-1e5,
         return_attention=False,
         return_embedding=False,
     ):
@@ -390,7 +391,7 @@ class Transformer(nn.Module):
                     (self.end_token, 0),
                 )
                 chosen_tokens, chosen_beam_indices = beam_search.advance(
-                    vocab_distributions
+                    vocab_distributions, trigram_penalty
                 )
 
                 batch_current_output_embeddings = torch.cat(

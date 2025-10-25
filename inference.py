@@ -172,6 +172,7 @@ if __name__ == "__main__":
                 input_ids,
                 max_output_length=100,
                 beam_width=1,
+                trigram_penalty=-1e5,
                 return_attention=ATTENTION_PLOT,
                 return_embedding=EMBEDDING_PLOT,
             )

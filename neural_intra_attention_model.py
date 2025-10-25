@@ -519,6 +519,7 @@ class NeuralIntraAttentionModel(nn.Module):
         batch_input_ids,
         max_output_length=100,
         beam_width=4,
+        trigram_penalty=-1e5,
         return_attention=False,
         return_embedding=False,
     ):
@@ -743,7 +744,7 @@ class NeuralIntraAttentionModel(nn.Module):
                 )
 
                 chosen_tokens, chosen_beam_indices = beam_search.advance(
-                    batch_final_distributions
+                    batch_final_distributions, trigram_penalty
                 )
                 current_embeddings = self._safe_embed(chosen_tokens)
                 batch_input_ids = batch_input_ids[chosen_beam_indices]

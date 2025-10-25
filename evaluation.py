@@ -130,7 +130,10 @@ if __name__ == "__main__":
                 reference_summaries = batch["target_text"]
             else:
                 batch_output_ids = model.infer(
-                    batch["input_ids"], max_output_length=5, beam_width=2
+                    batch["input_ids"],
+                    max_output_length=5,
+                    beam_width=2,
+                    trigram_penalty=-1e5,
                 )["output_ids"]
                 candidate_summaries = [
                     token_ids_to_text(
