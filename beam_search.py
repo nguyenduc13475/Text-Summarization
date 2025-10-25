@@ -28,13 +28,22 @@ class BeamSearch:
         self.finishes = (chosen_tokens == self.end_token).view(-1)
         return chosen_tokens
 
-    def advance(self, batch_final_distributions):
+    def advance(self, batch_final_distributions, trigram_penalty=-1e5):
         batch_log_probs = torch.log(batch_final_distributions + 1e-9)
         if self.finishes.any():
             finished_rows = self.finishes.nonzero(as_tuple=False).squeeze(1)
             if finished_rows.numel() > 0:
                 batch_log_probs[finished_rows] = -1e9
                 batch_log_probs[finished_rows, self.end_token] = 0.0
+
+        seqs = self.sequences.tolist()
+        for i, seq in enumerate(seqs):
+            if len(seq) >= 3:
+                trigrams = set(tuple(seq[j : j + 3]) for j in range(len(seq) - 2))
+                last_two = tuple(seq[-2:])
+                for token in range(batch_log_probs.shape[1]):
+                    if last_two + (token,) in trigrams:
+                        batch_log_probs[i, token] += trigram_penalty
 
         topk_vals, topk_idxs = torch.topk(batch_log_probs, k=self.beam_width, dim=1)
 
