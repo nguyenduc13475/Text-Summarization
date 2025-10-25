@@ -167,5 +167,9 @@ class TransformerTokenizer:
     def token_to_id(self, token):
         return self.tokenizer.token_to_id(token)
 
+    def id_to_token(self, id):
+        token = self.tokenizer._tokenizer.id_to_token(id)
+        return token if token is not None else "<unk>"
+
     def get_vocab_size(self):
         return self.tokenizer.get_vocab_size()
