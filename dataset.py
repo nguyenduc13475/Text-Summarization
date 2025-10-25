@@ -5,10 +5,10 @@ import joblib
 import requests
 import torch
 from datasets import load_dataset
-from tokenizers.implementations import ByteLevelBPETokenizer
 from torch.nn.utils.rnn import pad_sequence
 from torch.utils.data import Dataset, Sampler
 
+from tokenization import TransformerTokenizer
 from utils import cache, text_to_token_ids
 
 
@@ -67,7 +67,7 @@ class CNNDailyMailDataset(Dataset):
     def __init__(
         self,
         split="train",
-        tokenizer=ByteLevelBPETokenizer("vocab.json", "merges.txt"),
+        tokenizer=TransformerTokenizer("vocab.json", "merges.txt"),
         fold=None,
         num_folds=None,
         dataset=None,

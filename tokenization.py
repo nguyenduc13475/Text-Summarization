@@ -162,7 +162,7 @@ class TransformerTokenizer:
         return self.tokenizer.encode(text)
 
     def decode(self, text):
-        return self.tokenizer.decode(text)
+        return self.tokenizer.decode(text, skip_special_tokens=True)
 
     def token_to_id(self, token):
         return self.tokenizer.token_to_id(token)

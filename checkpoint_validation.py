@@ -2,7 +2,6 @@ from collections import defaultdict
 
 import matplotlib.pyplot as plt
 import torch
-from tokenizers.implementations import ByteLevelBPETokenizer
 
 from dataset import (
     CNNDailyMailDataset,
@@ -14,7 +13,7 @@ from environment import adaptive_display, detect_runtime_env, try_set_window_pos
 from metrics import compute_metric
 from neural_intra_attention_model import NeuralIntraAttentionModel
 from pointer_generator_network import PointerGeneratorNetwork
-from tokenization import PointerGeneratorTokenizer
+from tokenization import PointerGeneratorTokenizer, TransformerTokenizer
 from transformer import Transformer
 from utils import load_checkpoint, set_seed, token_ids_to_text
 
@@ -44,7 +43,7 @@ if __name__ == "__main__":
     metric_line_2ds = defaultdict(lambda: None)
 
     if MODEL == "TRANSFORMER":
-        tokenizer = ByteLevelBPETokenizer("vocab.json", "merges.txt")
+        tokenizer = TransformerTokenizer("vocab.json", "merges.txt")
     else:
         tokenizer = PointerGeneratorTokenizer("word_level_vocab.json")
 

@@ -5,7 +5,6 @@ from collections import defaultdict
 import matplotlib.pyplot as plt
 import numpy as np
 import torch
-from tokenizers.implementations import ByteLevelBPETokenizer
 
 from dataset import (
     CNNDailyMailDataset,
@@ -18,7 +17,7 @@ from metrics import compute_metric
 from neural_intra_attention_model import NeuralIntraAttentionModel
 from pointer_generator_network import PointerGeneratorNetwork
 from text_rank import text_rank_summarize
-from tokenization import PointerGeneratorTokenizer
+from tokenization import PointerGeneratorTokenizer, TransformerTokenizer
 from transformer import Transformer
 from utils import load_checkpoint, set_seed, token_ids_to_text
 
@@ -90,7 +89,7 @@ if __name__ == "__main__":
                     device=DEVICE,
                 )
             case "TRANSFORMER":
-                tokenizer = ByteLevelBPETokenizer("vocab.json", "merges.txt")
+                tokenizer = TransformerTokenizer("vocab.json", "merges.txt")
                 model = Transformer(
                     tokenizer=tokenizer,
                     d_model=256,

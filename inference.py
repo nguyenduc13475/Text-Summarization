@@ -7,13 +7,12 @@ import numpy as np
 import torch
 from datasets import load_dataset
 from sklearn.manifold import TSNE
-from tokenizers.implementations import ByteLevelBPETokenizer
 
 from environment import adaptive_display, detect_runtime_env
 from neural_intra_attention_model import NeuralIntraAttentionModel
 from pointer_generator_network import PointerGeneratorNetwork
 from text_rank import text_rank_summarize
-from tokenization import PointerGeneratorTokenizer
+from tokenization import PointerGeneratorTokenizer, TransformerTokenizer
 from transformer import Transformer
 from utils import load_checkpoint, text_to_token_ids, token_ids_to_text
 
@@ -34,7 +33,7 @@ print(INPUT_TEXT)
 print("=" * 60)
 
 if ENV in ("colab", "notebook"):
-    from IPython.display import display
+    pass
 
 
 def find_latest_checkpoint(checkpoint_folder):
@@ -147,7 +146,7 @@ if __name__ == "__main__":
                     device=DEVICE,
                 )
             case "TRANSFORMER":
-                tokenizer = ByteLevelBPETokenizer("vocab.json", "merges.txt")
+                tokenizer = TransformerTokenizer("vocab.json", "merges.txt")
                 model = Transformer(
                     tokenizer=tokenizer,
                     d_model=256,

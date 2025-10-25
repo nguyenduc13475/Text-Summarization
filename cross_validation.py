@@ -5,7 +5,6 @@ from collections import defaultdict
 import matplotlib.pyplot as plt
 import numpy as np
 import torch
-from tokenizers.implementations import ByteLevelBPETokenizer
 
 from dataset import (
     CNNDailyMailDataset,
@@ -16,7 +15,7 @@ from dataset import (
 from environment import adaptive_display, detect_runtime_env, try_set_window_position
 from neural_intra_attention_model import NeuralIntraAttentionModel
 from pointer_generator_network import PointerGeneratorNetwork
-from tokenization import PointerGeneratorTokenizer
+from tokenization import PointerGeneratorTokenizer, TransformerTokenizer
 from transformer import Transformer
 from utils import name_to_latex, print_log_file, set_seed
 
@@ -40,7 +39,7 @@ if __name__ == "__main__":
     fold_loss_history = []
     cross_validation_losses = []
     if MODEL == "TRANSFORMER":
-        tokenizer = ByteLevelBPETokenizer("vocab.json", "merges.txt")
+        tokenizer = TransformerTokenizer("vocab.json", "merges.txt")
     else:
         tokenizer = PointerGeneratorTokenizer("word_level_vocab.json")
     collate_fn = build_collate_fn(tokenizer)
