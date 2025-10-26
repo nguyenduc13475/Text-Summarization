@@ -171,7 +171,7 @@ if __name__ == "__main__":
             output = model.infer(
                 input_ids,
                 max_output_length=100,
-                beam_width=8,
+                beam_width=6,
                 trigram_penalty=-30,
                 bigram_penalty=-10,
                 unigram_penalty=-2,
