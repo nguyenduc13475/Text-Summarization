@@ -412,7 +412,7 @@ class Transformer(nn.Module):
                                     next_token = input_tokens[j + len(recent_tokens)]
                                     if next_token >= self.end_token:
                                         ngram_boost[b, next_token - self.end_token] += (
-                                            original_attention * 2
+                                            original_attention * lookpast * 0.5
                                         )
                                         is_continue = False
                 vocab_distributions = F.pad(
