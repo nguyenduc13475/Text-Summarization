@@ -251,7 +251,7 @@ class Transformer(nn.Module):
         batch_current_token_embeddings = self.embedding_layer(batch_current_tokens)
 
         causal_mask = nn.Transformer.generate_square_subsequent_mask(
-            max_target_length
+            max_target_length, dtype=torch.bool
         ).to(self.device)
         input_padding_mask = batch_input_ids == self.pad_token
         current_token_padding_mask = batch_current_tokens == self.pad_token
@@ -372,7 +372,7 @@ class Transformer(nn.Module):
 
             for _ in range(2, max_output_length + 1):
                 tgt_mask = nn.Transformer.generate_square_subsequent_mask(
-                    batch_current_output_embeddings.shape[1]
+                    batch_current_output_embeddings.shape[1], dtype=torch.bool
                 ).to(self.device)
 
                 decoder_outputs = self.transformer(
