@@ -9,7 +9,7 @@ from torch.nn.utils.rnn import pack_padded_sequence, pad_packed_sequence
 
 from beam_search import BeamSearch
 from metrics import compute_metric
-from utils import tensor_dict_to_scalar, token_ids_to_text
+from utils import create_appearance_boost, tensor_dict_to_scalar, token_ids_to_text
 
 
 def init_weights(m):
@@ -520,6 +520,8 @@ class NeuralIntraAttentionModel(nn.Module):
         max_output_length=100,
         beam_width=4,
         trigram_penalty=-1e5,
+        bigram_penalty=-1e5,
+        bigram_range=8,
         original_attention=0.7,
         return_attention=False,
         return_embedding=False,
@@ -616,16 +618,15 @@ class NeuralIntraAttentionModel(nn.Module):
                 dim=1,
             )
 
-            logits_boost = torch.zeros(batch_size, self.vocab_size, device=self.device)
-            for i in range(batch_size):
-                logits_boost[i, torch.unique(batch_input_ids[i])] = original_attention
-            logits_boost = logits_boost[:, self.end_token :]
+            appearance_boost = create_appearance_boost(
+                batch_input_ids, self, original_attention
+            )
 
             vocab_distributions = F.softmax(
                 self.vocab_proj_2(
                     self.bottle_neck_activation(self.vocab_proj_1(concat_states))
                 )
-                + logits_boost,
+                + appearance_boost,
                 dim=1,
             )
 
@@ -662,6 +663,7 @@ class NeuralIntraAttentionModel(nn.Module):
                 decoder_attention_distributions_list = []
 
             batch_input_ids = batch_input_ids.repeat_interleave(beam_width, dim=0)
+            appearance_boost = appearance_boost.repeat_interleave(beam_width, dim=0)
 
             for _ in range(2, max_output_length + 1):
                 _, (decoder_hidden_states, decoder_cell_states) = self.decoder(
@@ -738,7 +740,7 @@ class NeuralIntraAttentionModel(nn.Module):
                     self.vocab_proj_2(
                         self.bottle_neck_activation(self.vocab_proj_1(concat_states))
                     )
-                    + logits_boost,
+                    + appearance_boost,
                     dim=1,
                 )
 
@@ -752,7 +754,10 @@ class NeuralIntraAttentionModel(nn.Module):
                 )
 
                 chosen_tokens, chosen_beam_indices = beam_search.advance(
-                    batch_final_distributions, trigram_penalty
+                    batch_final_distributions,
+                    trigram_penalty,
+                    bigram_penalty,
+                    bigram_range,
                 )
                 current_embeddings = self._safe_embed(chosen_tokens)
                 batch_input_ids = batch_input_ids[chosen_beam_indices]

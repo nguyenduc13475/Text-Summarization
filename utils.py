@@ -124,3 +124,12 @@ def cache(func, name):
         with open(cache_file, "wb") as f:
             pickle.dump(result, f)
         return result
+
+
+def create_appearance_boost(batch_input_ids, model, original_attention):
+    batch_size = batch_input_ids.shape[0]
+    appearance_boost = torch.zeros(batch_size, model.vocab_size, device=model.device)
+    for i in range(batch_size):
+        appearance_boost[i, torch.unique(batch_input_ids[i])] = original_attention
+    appearance_boost = appearance_boost[:, model.end_token :]
+    return appearance_boost

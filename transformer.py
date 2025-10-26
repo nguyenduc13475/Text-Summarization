@@ -5,7 +5,7 @@ import torch.nn.init as init
 import torch.optim as optim
 
 from beam_search import BeamSearch
-from utils import tensor_dict_to_scalar
+from utils import create_appearance_boost, tensor_dict_to_scalar
 
 
 def init_weights(m):
@@ -343,10 +343,9 @@ class Transformer(nn.Module):
 
             batch_current_output_embeddings = start_embedding.repeat(batch_size, 1, 1)
 
-            logits_boost = torch.zeros(batch_size, self.vocab_size, device=self.device)
-            for i in range(batch_size):
-                logits_boost[i, torch.unique(batch_input_ids[i])] = original_attention
-            logits_boost = logits_boost[:, self.end_token :]
+            appearance_boost = create_appearance_boost(
+                batch_input_ids, self, original_attention
+            )
 
             decoder_outputs = self.transformer(
                 batch_input_embeddings,
@@ -357,7 +356,7 @@ class Transformer(nn.Module):
 
             vocab_distributions = F.pad(
                 F.softmax(
-                    self.out_proj(decoder_outputs) + logits_boost,
+                    self.out_proj(decoder_outputs) + appearance_boost,
                     dim=-1,
                 ),
                 (self.end_token, 0),
@@ -376,6 +375,7 @@ class Transformer(nn.Module):
             beam_input_embeddings = batch_input_embeddings.repeat_interleave(
                 beam_width, dim=0
             )
+            appearance_boost = appearance_boost.repeat_interleave(beam_width, dim=0)
             input_padding_mask = input_padding_mask.repeat_interleave(beam_width, dim=0)
 
             for _ in range(2, max_output_length + 1):
@@ -391,9 +391,23 @@ class Transformer(nn.Module):
                     memory_key_padding_mask=input_padding_mask,
                 )[:, -1, :]
 
+                ngram_boost = torch.zeros_like(appearance_boost)
+                for b in range(batch_size * beam_width):
+                    seq = beam_search.sequences[b].tolist()
+                    if len(seq) < 2:
+                        continue
+
+                    recent_tokens = seq[-3:]
+                    input_tokens = batch_input_ids[b // beam_width].tolist()
+
+                    for j in range(len(input_tokens) - len(recent_tokens)):
+                        if input_tokens[j : j + len(recent_tokens)] == recent_tokens:
+                            next_token = input_tokens[j + len(recent_tokens)]
+                            ngram_boost[b, next_token] += original_attention * 0.8
+
                 vocab_distributions = F.pad(
                     F.softmax(
-                        self.out_proj(decoder_outputs) + logits_boost,
+                        self.out_proj(decoder_outputs) + appearance_boost + ngram_boost,
                         dim=-1,
                     ),
                     (self.end_token, 0),

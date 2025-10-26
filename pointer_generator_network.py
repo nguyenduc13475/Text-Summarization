@@ -6,7 +6,7 @@ import torch.optim as optim
 from torch.nn.utils.rnn import pack_padded_sequence, pad_packed_sequence
 
 from beam_search import BeamSearch
-from utils import tensor_dict_to_scalar
+from utils import create_appearance_boost, tensor_dict_to_scalar
 
 
 def init_weights(m):
@@ -368,16 +368,15 @@ class PointerGeneratorNetwork(nn.Module):
                 [decoder_hidden_states[-1], context_vectors], dim=1
             )
 
-            logits_boost = torch.zeros(batch_size, self.vocab_size, device=self.device)
-            for i in range(batch_size):
-                logits_boost[i, torch.unique(batch_input_ids[i])] = original_attention
-            logits_boost = logits_boost[:, self.end_token :]
+            appearance_boost = create_appearance_boost(
+                batch_input_ids, self, original_attention
+            )
 
             vocab_distributions = F.softmax(
                 self.vocab_proj_2(
                     self.bottle_neck_activation(self.vocab_proj_1(hidden_contexts))
                 )
-                + logits_boost,
+                + appearance_boost,
                 dim=1,
             )
             p_gens = torch.sigmoid(
@@ -412,6 +411,7 @@ class PointerGeneratorNetwork(nn.Module):
             )
             input_padding_mask = input_padding_mask.repeat_interleave(beam_width, dim=0)
             batch_input_ids = batch_input_ids.repeat_interleave(beam_width, dim=0)
+            appearance_boost = appearance_boost.repeat_interleave(beam_width, dim=0)
 
             for _ in range(2, max_output_length + 1):
                 _, (decoder_hidden_states, decoder_cell_states) = self.decoder(
@@ -446,7 +446,7 @@ class PointerGeneratorNetwork(nn.Module):
                     self.vocab_proj_2(
                         self.bottle_neck_activation(self.vocab_proj_1(hidden_contexts))
                     )
-                    + logits_boost,
+                    + appearance_boost,
                     dim=1,
                 )
                 p_gens = torch.sigmoid(
