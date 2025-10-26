@@ -138,6 +138,7 @@ if __name__ == "__main__":
                     unigram_penalty=-2,
                     penalty_range=8,
                     original_attention=0.7,
+                    shorten_level=10,
                 )["output_ids"]
                 candidate_summaries = [
                     token_ids_to_text(

@@ -177,6 +177,7 @@ if __name__ == "__main__":
                 unigram_penalty=-2,
                 penalty_range=15,
                 original_attention=1,
+                shorten_level=10,
                 return_attention=ATTENTION_PLOT,
                 return_embedding=EMBEDDING_PLOT,
             )

@@ -524,6 +524,7 @@ class NeuralIntraAttentionModel(nn.Module):
         unigram_penalty=-2,
         penalty_range=8,
         original_attention=0.7,
+        shorten_level=10,
         return_attention=False,
         return_embedding=False,
     ):
@@ -667,6 +668,7 @@ class NeuralIntraAttentionModel(nn.Module):
             appearance_boost = appearance_boost.repeat_interleave(beam_width, dim=0)
 
             for _ in range(2, max_output_length + 1):
+                appearance_boost[:, 0] += shorten_level / max_output_length
                 _, (decoder_hidden_states, decoder_cell_states) = self.decoder(
                     current_embeddings.unsqueeze(1),
                     (decoder_hidden_states, decoder_cell_states),

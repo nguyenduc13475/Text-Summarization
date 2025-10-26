@@ -315,6 +315,7 @@ class Transformer(nn.Module):
         unigram_penalty=-2,
         penalty_range=8,
         original_attention=0.7,
+        shorten_level=10,
         return_attention=False,
         return_embedding=False,
     ):
@@ -380,7 +381,7 @@ class Transformer(nn.Module):
             input_padding_mask = input_padding_mask.repeat_interleave(beam_width, dim=0)
 
             for step in range(2, max_output_length + 1):
-                appearance_boost[:, 0] += 10 / max_output_length
+                appearance_boost[:, 0] += shorten_level / max_output_length
                 tgt_mask = nn.Transformer.generate_square_subsequent_mask(
                     batch_current_output_embeddings.shape[1], dtype=torch.bool
                 ).to(self.device)
