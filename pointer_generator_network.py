@@ -284,6 +284,7 @@ class PointerGeneratorNetwork(nn.Module):
         max_output_length=200,
         beam_width=3,
         trigram_penalty=-1e5,
+        original_attention=0.7,
         return_attention=False,
         return_embedding=False,
     ):
@@ -364,10 +365,17 @@ class PointerGeneratorNetwork(nn.Module):
             hidden_contexts = torch.cat(
                 [decoder_hidden_states[-1], context_vectors], dim=1
             )
+
+            logits_boost = torch.zeros(batch_size, self.vocab_size, device=self.device)
+            for i in range(batch_size):
+                logits_boost[i, torch.unique(batch_input_ids[i])] = original_attention
+            logits_boost = logits_boost[:, self.end_token :]
+
             vocab_distributions = F.softmax(
                 self.vocab_proj_2(
                     self.bottle_neck_activation(self.vocab_proj_1(hidden_contexts))
-                ),
+                )
+                + logits_boost,
                 dim=1,
             )
             p_gens = torch.sigmoid(
@@ -435,7 +443,8 @@ class PointerGeneratorNetwork(nn.Module):
                 vocab_distributions = F.softmax(
                     self.vocab_proj_2(
                         self.bottle_neck_activation(self.vocab_proj_1(hidden_contexts))
-                    ),
+                    )
+                    + logits_boost,
                     dim=1,
                 )
                 p_gens = torch.sigmoid(

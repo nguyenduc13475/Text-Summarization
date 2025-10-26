@@ -311,6 +311,7 @@ class Transformer(nn.Module):
         max_output_length=100,
         beam_width=1,
         trigram_penalty=-1e5,
+        original_attention=0.7,
         return_attention=False,
         return_embedding=False,
     ):
@@ -340,6 +341,11 @@ class Transformer(nn.Module):
 
             batch_current_output_embeddings = start_embedding.repeat(batch_size, 1, 1)
 
+            logits_boost = torch.zeros(batch_size, self.vocab_size, device=self.device)
+            for i in range(batch_size):
+                logits_boost[i, torch.unique(batch_input_ids[i])] = original_attention
+            logits_boost = logits_boost[:, self.end_token :]
+
             decoder_outputs = self.transformer(
                 batch_input_embeddings,
                 batch_current_output_embeddings,
@@ -349,7 +355,7 @@ class Transformer(nn.Module):
 
             vocab_distributions = F.pad(
                 F.softmax(
-                    self.out_proj(decoder_outputs),
+                    self.out_proj(decoder_outputs) + logits_boost,
                     dim=-1,
                 ),
                 (self.end_token, 0),
@@ -385,7 +391,7 @@ class Transformer(nn.Module):
 
                 vocab_distributions = F.pad(
                     F.softmax(
-                        self.out_proj(decoder_outputs),
+                        self.out_proj(decoder_outputs) + logits_boost,
                         dim=-1,
                     ),
                     (self.end_token, 0),

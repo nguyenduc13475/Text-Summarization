@@ -520,6 +520,7 @@ class NeuralIntraAttentionModel(nn.Module):
         max_output_length=100,
         beam_width=4,
         trigram_penalty=-1e5,
+        original_attention=0.7,
         return_attention=False,
         return_embedding=False,
     ):
@@ -615,10 +616,16 @@ class NeuralIntraAttentionModel(nn.Module):
                 dim=1,
             )
 
+            logits_boost = torch.zeros(batch_size, self.vocab_size, device=self.device)
+            for i in range(batch_size):
+                logits_boost[i, torch.unique(batch_input_ids[i])] = original_attention
+            logits_boost = logits_boost[:, self.end_token :]
+
             vocab_distributions = F.softmax(
                 self.vocab_proj_2(
                     self.bottle_neck_activation(self.vocab_proj_1(concat_states))
-                ),
+                )
+                + logits_boost,
                 dim=1,
             )
 
@@ -730,7 +737,8 @@ class NeuralIntraAttentionModel(nn.Module):
                 vocab_distributions = F.softmax(
                     self.vocab_proj_2(
                         self.bottle_neck_activation(self.vocab_proj_1(concat_states))
-                    ),
+                    )
+                    + logits_boost,
                     dim=1,
                 )
 

@@ -134,6 +134,7 @@ if __name__ == "__main__":
                     max_output_length=5,
                     beam_width=2,
                     trigram_penalty=-1e5,
+                    original_attention=0.7,
                 )["output_ids"]
                 candidate_summaries = [
                     token_ids_to_text(

@@ -117,6 +117,7 @@ if __name__ == "__main__":
                 max_output_length=200,
                 beam_width=3,
                 trigram_penalty=-1e5,
+                original_attention=0.7,
             )["output_ids"]
 
             output_texts = [

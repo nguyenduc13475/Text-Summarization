@@ -1,4 +1,4 @@
-from tokenization import TransformerTokenizer
+import torch
 
-a = TransformerTokenizer("vocab.json", "merges.txt")
-print(a.id_to_token(49000))
+a = torch.randn(3, 4)
+print(torch.unique(a))
