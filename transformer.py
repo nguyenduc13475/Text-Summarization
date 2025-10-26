@@ -330,7 +330,7 @@ class Transformer(nn.Module):
             if batch_input_ids.dim() == 1:
                 batch_input_ids = batch_input_ids.unsqueeze(0)
 
-            batch_size = batch_input_ids.shape[0]
+            batch_size, max_input_length = batch_input_ids.shape
             beam_search = BeamSearch(
                 batch_size, beam_width, self.start_token, self.end_token, self.device
             )
@@ -395,16 +395,24 @@ class Transformer(nn.Module):
                 ngram_boost = torch.zeros_like(appearance_boost)
                 for b in range(batch_size * beam_width):
                     seq = beam_search.sequences[b].tolist()
-                    if len(seq) < 2:
-                        continue
-
-                    recent_tokens = seq[-3:]
                     input_tokens = batch_input_ids[b // beam_width].tolist()
 
-                    for j in range(len(input_tokens) - len(recent_tokens)):
-                        if input_tokens[j : j + len(recent_tokens)] == recent_tokens:
-                            next_token = input_tokens[j + len(recent_tokens)]
-                            ngram_boost[b, next_token] += original_attention * 2
+                    is_continue = True
+
+                    for lookpast in range(5, 2, -1):
+                        if len(seq) >= lookpast and is_continue:
+                            recent_tokens = seq[-lookpast:]
+                            for j in range(max_input_length - lookpast):
+                                if (
+                                    input_tokens[j : j + len(recent_tokens)]
+                                    == recent_tokens
+                                ):
+                                    next_token = input_tokens[j + len(recent_tokens)]
+                                    if next_token >= self.end_token:
+                                        ngram_boost[b, next_token - self.end_token] += (
+                                            original_attention * 2
+                                        )
+                                        is_continue = False
 
                 vocab_distributions = F.pad(
                     F.softmax(
