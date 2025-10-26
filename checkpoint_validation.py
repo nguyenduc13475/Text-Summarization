@@ -118,7 +118,8 @@ if __name__ == "__main__":
                 beam_width=3,
                 trigram_penalty=-1e5,
                 bigram_penalty=-1e5,
-                bigram_range=8,
+                unigram_penalty=-2,
+                penalty_range=8,
                 original_attention=0.7,
             )["output_ids"]
 

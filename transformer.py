@@ -312,7 +312,8 @@ class Transformer(nn.Module):
         beam_width=1,
         trigram_penalty=-1e5,
         bigram_penalty=-1e5,
-        bigram_range=8,
+        unigram_penalty=-2,
+        penalty_range=8,
         original_attention=0.7,
         return_attention=False,
         return_embedding=False,
@@ -413,7 +414,11 @@ class Transformer(nn.Module):
                     (self.end_token, 0),
                 )
                 chosen_tokens, chosen_beam_indices = beam_search.advance(
-                    vocab_distributions, trigram_penalty, bigram_penalty, bigram_range
+                    vocab_distributions,
+                    trigram_penalty,
+                    bigram_penalty,
+                    unigram_penalty,
+                    penalty_range,
                 )
 
                 batch_current_output_embeddings = torch.cat(

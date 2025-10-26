@@ -521,7 +521,8 @@ class NeuralIntraAttentionModel(nn.Module):
         beam_width=4,
         trigram_penalty=-1e5,
         bigram_penalty=-1e5,
-        bigram_range=8,
+        unigram_penalty=-2,
+        penalty_range=8,
         original_attention=0.7,
         return_attention=False,
         return_embedding=False,
@@ -757,7 +758,8 @@ class NeuralIntraAttentionModel(nn.Module):
                     batch_final_distributions,
                     trigram_penalty,
                     bigram_penalty,
-                    bigram_range,
+                    unigram_penalty,
+                    penalty_range,
                 )
                 current_embeddings = self._safe_embed(chosen_tokens)
                 batch_input_ids = batch_input_ids[chosen_beam_indices]
