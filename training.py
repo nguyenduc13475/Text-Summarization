@@ -164,16 +164,23 @@ if __name__ == "__main__":
     if CONTINUE_TRAINING and os.path.exists(TEMP_MODEL_FILE):
         load_checkpoint(model, TEMP_MODEL_FILE, map_location=DEVICE)
         print("Model loaded successfully!")
-        with open(LAST_TRAIN_STEP_FILE, "rb") as f:
-            (
-                latest_epoch_idx,
-                latest_batch_idx,
-                epoch_loss_history,
-                batch_loss_history,
-                latest_epoch_num_tokens,
-                latest_raw_batch_loss_history,
-                latest_num_samples,
-            ) = pickle.load(f)
+        if os.path.exists(LAST_TRAIN_STEP_FILE):
+            with open(LAST_TRAIN_STEP_FILE, "rb") as f:
+                (
+                    latest_epoch_idx,
+                    latest_batch_idx,
+                    epoch_loss_history,
+                    batch_loss_history,
+                    latest_epoch_num_tokens,
+                    latest_raw_batch_loss_history,
+                    latest_num_samples,
+                ) = pickle.load(f)
+        else:
+            latest_epoch_idx = 0
+            latest_batch_idx = -1
+            latest_epoch_num_tokens = 0
+            latest_raw_batch_loss_history = defaultdict(list)
+            latest_num_samples = 0
     else:
         clear_checkpoint_folder()
         CONTINUE_TRAINING = False
