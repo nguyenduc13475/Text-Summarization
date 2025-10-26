@@ -284,6 +284,8 @@ class PointerGeneratorNetwork(nn.Module):
         max_output_length=200,
         beam_width=3,
         trigram_penalty=-1e5,
+        bigram_penalty=-1e5,
+        bigram_range=8,
         original_attention=0.7,
         return_attention=False,
         return_embedding=False,
@@ -462,7 +464,10 @@ class PointerGeneratorNetwork(nn.Module):
                 )
 
                 chosen_tokens, chosen_beam_indices = beam_search.advance(
-                    batch_final_distributions, trigram_penalty
+                    batch_final_distributions,
+                    trigram_penalty,
+                    bigram_penalty,
+                    bigram_range,
                 )
                 current_embeddings = self._safe_embed(chosen_tokens)
                 batch_input_ids = batch_input_ids[chosen_beam_indices]
