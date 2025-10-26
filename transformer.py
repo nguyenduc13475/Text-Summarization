@@ -379,7 +379,7 @@ class Transformer(nn.Module):
             appearance_boost = appearance_boost.repeat_interleave(beam_width, dim=0)
             input_padding_mask = input_padding_mask.repeat_interleave(beam_width, dim=0)
 
-            for _ in range(2, max_output_length + 1):
+            for step in range(2, max_output_length + 1):
                 tgt_mask = nn.Transformer.generate_square_subsequent_mask(
                     batch_current_output_embeddings.shape[1], dtype=torch.bool
                 ).to(self.device)
@@ -413,7 +413,7 @@ class Transformer(nn.Module):
                                             original_attention * 2
                                         )
                                         is_continue = False
-
+                ngram_boost[:, 0] += step / max_output_length
                 vocab_distributions = F.pad(
                     F.softmax(
                         self.out_proj(decoder_outputs) + appearance_boost + ngram_boost,

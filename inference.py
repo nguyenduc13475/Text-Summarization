@@ -171,12 +171,12 @@ if __name__ == "__main__":
             output = model.infer(
                 input_ids,
                 max_output_length=100,
-                beam_width=6,
-                trigram_penalty=-20,
+                beam_width=8,
+                trigram_penalty=-30,
                 bigram_penalty=-10,
                 unigram_penalty=-2,
-                penalty_range=10,
-                original_attention=0.7,
+                penalty_range=15,
+                original_attention=1,
                 return_attention=ATTENTION_PLOT,
                 return_embedding=EMBEDDING_PLOT,
             )
