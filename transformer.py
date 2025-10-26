@@ -404,7 +404,7 @@ class Transformer(nn.Module):
                     for j in range(len(input_tokens) - len(recent_tokens)):
                         if input_tokens[j : j + len(recent_tokens)] == recent_tokens:
                             next_token = input_tokens[j + len(recent_tokens)]
-                            ngram_boost[b, next_token] += original_attention * 0.8
+                            ngram_boost[b, next_token] += original_attention * 2
 
                 vocab_distributions = F.pad(
                     F.softmax(
