@@ -222,7 +222,11 @@ class Transformer(nn.Module):
         self.transformer = SimpleTransformer(
             d_model=d_model, nhead=nhead, num_layers=num_layers, dropout=0
         )
-        self.out_proj = nn.Linear(d_model, self.vocab_size - self.end_token)
+        self.hidden_proj_1 = nn.Linear(d_model, d_model * 2)
+        self.activation_1 = nn.ReLU()
+        self.hidden_proj_2 = nn.Linear(d_model * 2, d_model * 2)
+        self.activation_2 = nn.ReLU()
+        self.out_proj = nn.Linear(d_model * 2, self.vocab_size - self.end_token)
         self.device = torch.device(device)
 
         self.apply(init_weights)
@@ -233,6 +237,13 @@ class Transformer(nn.Module):
         if self.device.type == "cuda":
             self.scaler = torch.amp.GradScaler()
         self.loss_scale = 1e-3
+
+    def final_project(self, x):
+        return self.out_proj(
+            self.activation_2(
+                self.hidden_proj_2(self.activation_1(self.hidden_proj_1(x)))
+            )
+        )
 
     def compute_loss(self, batch_input_ids, batch_target_ids):
         batch_input_ids = batch_input_ids.to(self.device)
@@ -267,7 +278,7 @@ class Transformer(nn.Module):
 
         batch_vocab_distributions = F.pad(
             F.softmax(
-                self.out_proj(decoder_outputs),
+                self.final_project(decoder_outputs),
                 dim=-1,
             ),
             (self.end_token, 0),
@@ -358,7 +369,7 @@ class Transformer(nn.Module):
 
             vocab_distributions = F.pad(
                 F.softmax(
-                    self.out_proj(decoder_outputs) + appearance_boost,
+                    self.final_project(decoder_outputs) + appearance_boost,
                     dim=-1,
                 ),
                 (self.end_token, 0),
@@ -417,7 +428,9 @@ class Transformer(nn.Module):
                                         is_continue = False
                 vocab_distributions = F.pad(
                     F.softmax(
-                        self.out_proj(decoder_outputs) + appearance_boost + ngram_boost,
+                        self.final_project(decoder_outputs)
+                        + appearance_boost
+                        + ngram_boost,
                         dim=-1,
                     ),
                     (self.end_token, 0),
