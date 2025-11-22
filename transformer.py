@@ -39,8 +39,10 @@ class EmbeddingLayer(nn.Module):
         self.embedding_dim = embedding_dim
 
     @classmethod
-    def positional_encoding(cls, max_sequence_length, d_model):
-        positions = torch.arange(max_sequence_length).unsqueeze(1)
+    def positional_encoding(cls, max_sequence_length, d_model, start_pos=0):
+        positions = torch.arange(start_pos, start_pos + max_sequence_length).unsqueeze(
+            1
+        )
         dims = torch.arange(d_model).unsqueeze(0)
 
         angle_rates = 1 / torch.pow(10000, (2 * (dims // 2)) / d_model)
@@ -52,9 +54,9 @@ class EmbeddingLayer(nn.Module):
 
         return pos_encoding
 
-    def forward(self, input_ids):
+    def forward(self, input_ids, start_pos=0):
         return self.embedding(input_ids) + 0.1 * self.positional_encoding(
-            input_ids.shape[-1], self.embedding_dim
+            input_ids.shape[-1], self.embedding_dim, start_pos=start_pos
         ).to(input_ids.device)
 
 
@@ -380,7 +382,7 @@ class Transformer(nn.Module):
             batch_current_output_embeddings = torch.cat(
                 [
                     start_embedding.repeat(batch_size * beam_width, 1, 1),
-                    self.embedding_layer(chosen_tokens).unsqueeze(1),
+                    self.embedding_layer(chosen_tokens, start_pos=1).unsqueeze(1),
                 ],
                 dim=1,
             )
@@ -443,10 +445,14 @@ class Transformer(nn.Module):
                     penalty_range,
                 )
 
+                current_length = batch_current_output_embeddings.shape[1]
+
                 batch_current_output_embeddings = torch.cat(
                     [
                         batch_current_output_embeddings[chosen_beam_indices],
-                        self.embedding_layer(chosen_tokens).unsqueeze(1),
+                        self.embedding_layer(
+                            chosen_tokens, start_pos=current_length
+                        ).unsqueeze(1),
                     ],
                     dim=1,
                 )
