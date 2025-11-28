@@ -355,10 +355,16 @@ if __name__ == "__main__":
                         display(figure)
 
             if split == "train" and SAVE_CHECKPOINT:
-                save_checkpoint(model, f"{CHECKPOINT_FOLDER}/checkpoint_{epoch}.pt")
+                save_checkpoint(
+                    model,
+                    f"{CHECKPOINT_FOLDER}/checkpoint_{epoch}.pt",
+                    save_optimizer=False,
+                )
                 if ENV == "colab" and os.path.exists("/content/drive/MyDrive"):
                     save_checkpoint(
-                        model, f"/content/drive/MyDrive/checkpoint_{epoch}.pt"
+                        model,
+                        f"/content/drive/MyDrive/checkpoint_{epoch}.pt",
+                        save_optimizer=False,
                     )
 
     loss_log_file.close()

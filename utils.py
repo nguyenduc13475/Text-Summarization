@@ -99,18 +99,24 @@ def print_log_file(log, log_file):
     log_file.write(log + "\n")
 
 
-def save_checkpoint(model, checkpoint_file):
-    checkpoint = {
-        "model_state_dict": model.state_dict(),
-        "optimizer_state_dict": model.optimizer.state_dict(),
-    }
-    torch.save(checkpoint, checkpoint_file)
+def save_checkpoint(model, checkpoint_file, save_optimizer=True):
+    if save_optimizer:
+        checkpoint = {
+            "model_state_dict": model.state_dict(),
+            "optimizer_state_dict": model.optimizer.state_dict(),
+        }
+        torch.save(checkpoint, checkpoint_file)
+    else:
+        torch.save(model.state_dict(), checkpoint_file)
 
 
-def load_checkpoint(model, checkpoint_file, map_location="cpu"):
+def load_checkpoint(model, checkpoint_file, map_location="cpu", load_optimizer=True):
     checkpoint = torch.load(checkpoint_file, map_location=map_location)
-    model.load_state_dict(checkpoint["model_state_dict"])
-    model.optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
+    if load_optimizer:
+        model.load_state_dict(checkpoint["model_state_dict"])
+        model.optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
+    else:
+        model.load_state_dict(checkpoint)
 
 
 def cache(func, name):
