@@ -117,9 +117,7 @@ if __name__ == "__main__":
                 METRICS, output_texts, batch["target_text"]
             ).items():
                 metrics[metric].extend(values)
-            print(
-                f"Validated {num_samples}/{len(ds) if len(ds) is not None else len(ds)} samples"
-            )
+            print(f"Validated {num_samples}/{len(ds)} samples")
             torch.cuda.empty_cache()
 
         print("=================================================")
