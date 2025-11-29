@@ -15,7 +15,7 @@ Nhóm hiện thực và so sánh nhiều mô hình hiện đại trong tóm tắ
   (sử dụng mục tiêu hỗn hợp: Reinforcement Learning loss + Negative Log-Likelihood loss)
 - **Transformer**
 
-Ngoài ra, nhóm cũng cài đặt **TextRank** để tham khảo.
+Ngoài ra, nhóm cũng hiện thực **TextRank** để so sánh.
 
 ---
 
