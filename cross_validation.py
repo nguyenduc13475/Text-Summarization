@@ -19,16 +19,13 @@ from tokenization import PointerGeneratorTokenizer, TransformerTokenizer
 from transformer import Transformer
 from utils import name_to_latex, print_log_file, set_seed
 
-logging.getLogger("datasets").setLevel(logging.ERROR)
-
 MODEL = "POINTER_GENERATOR_NETWORK"
-NUM_EPOCHS = 2
-MAX_TOKENS_EACH_BATCH = 3000
-DATASET_LENGTH = 15
-NUM_FOLDS = 4
+NUM_EPOCHS = 10
+MAX_TOKENS_EACH_BATCH = 10000
+NUM_FOLDS = 10
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 LOSS_LOG_MODE = "console"
-LOSS_LOG_INTERVAL = 3
+LOSS_LOG_INTERVAL = 10
 ENV = detect_runtime_env()
 
 if ENV in ("colab", "notebook"):
@@ -89,7 +86,7 @@ if __name__ == "__main__":
                     bottle_neck_dim=512,
                     num_layers=2,
                     cov_loss_factor=1.0,
-                    learning_rate=1e-2,
+                    learning_rate=1e-3,
                     device=DEVICE,
                 )
             case "NEURAL_INTRA_ATTENTION_MODEL":
@@ -97,18 +94,19 @@ if __name__ == "__main__":
                     tokenizer=tokenizer,
                     embedding_dim=128,
                     hidden_dim=256,
+                    bottle_neck_dim=512,
                     num_layers=2,
-                    rl_loss_factor=0.75,
-                    learning_rate=1e-2,
+                    rl_loss_factor=0.0,
+                    learning_rate=1e-3,
                     device=DEVICE,
                 )
             case "TRANSFORMER":
                 model = Transformer(
                     tokenizer=tokenizer,
                     d_model=256,
-                    nhead=8,
+                    nhead=2,
                     num_layers=3,
-                    learning_rate=1e-3,
+                    learning_rate=1e-4,
                     device=DEVICE,
                 )
 
@@ -118,13 +116,11 @@ if __name__ == "__main__":
                 tokenizer=tokenizer,
                 fold=fold,
                 num_folds=NUM_FOLDS,
-                dataset_length=DATASET_LENGTH,
             )
             loader = DataLoader(
                 ds,
                 collate_fn=collate_fn,
                 batch_sampler=DynamicBatchSampler(ds, max_tokens=MAX_TOKENS_EACH_BATCH),
-                pin_memory=True if DEVICE == "cuda" else False,
             )
 
             batch_step = (
@@ -153,7 +149,6 @@ if __name__ == "__main__":
                                 batch["oov_list"],
                                 batch["input_length"],
                                 batch["target_length"],
-                                max_reinforce_length=100,
                                 target_texts=batch["target_text"],
                             )
                         case "TRANSFORMER":

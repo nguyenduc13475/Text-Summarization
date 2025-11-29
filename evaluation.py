@@ -32,27 +32,24 @@ MODELS = [
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 METRICS = ["rouge1", "rouge2", "rougeL", "bleu4", "meteor", "bertscore", "moverscore"]
 MAX_TOKENS_EACH_BATCH = 10000
-DATASET_LENGTH = 1250
 ENV = detect_runtime_env()
-if ENV in ("colab", "notebook"):
-    from IPython.display import display
 
 
 def find_latest_checkpoint(checkpoint_folder):
     if os.path.exists(checkpoint_folder) and any(
-        re.match(r"^checkpoint([1-9]\d*)\.pt$", f)
+        re.match(r"^checkpoint_([0-9]\d*)\.pt$", f)
         for f in os.listdir(checkpoint_folder)
     ):
         latest_checkpoint = max(
             (
                 int(m.group(1))
                 for f in os.listdir(checkpoint_folder)
-                if (m := re.match(r"^checkpoint([1-9]\d*)\.pt$", f))
+                if (m := re.match(r"^checkpoint_([0-9]\d*)\.pt$", f))
             )
         )
 
         return (
-            f"{checkpoint_folder}/checkpoint{latest_checkpoint}.pt",
+            f"{checkpoint_folder}/checkpoint_{latest_checkpoint}.pt",
             latest_checkpoint,
         )
 
@@ -67,25 +64,22 @@ if __name__ == "__main__":
                 tokenizer = PointerGeneratorTokenizer("word_level_vocab.json")
                 model = PointerGeneratorNetwork(
                     tokenizer=tokenizer,
-                    embedding_dim=256,
+                    embedding_dim=128,
                     encoder_hidden_dim=256,
                     decoder_hidden_dim=256,
                     attention_dim=256,
-                    bottle_neck_dim=256,
-                    num_layers=3,
-                    cov_loss_factor=1.0,
-                    learning_rate=1e-3,
+                    bottle_neck_dim=512,
+                    num_layers=2,
                     device=DEVICE,
                 )
             case "NEURAL_INTRA_ATTENTION_MODEL":
                 tokenizer = PointerGeneratorTokenizer("word_level_vocab.json")
                 model = NeuralIntraAttentionModel(
                     tokenizer=tokenizer,
-                    embedding_dim=256,
+                    embedding_dim=128,
                     hidden_dim=256,
-                    num_layers=3,
-                    rl_loss_factor=0.75,
-                    learning_rate=1e-3,
+                    bottle_neck_dim=512,
+                    num_layers=2,
                     device=DEVICE,
                 )
             case "TRANSFORMER":
@@ -93,28 +87,21 @@ if __name__ == "__main__":
                 model = Transformer(
                     tokenizer=tokenizer,
                     d_model=256,
-                    nhead=8,
+                    nhead=2,
                     num_layers=3,
-                    learning_rate=1e-3,
                     device=DEVICE,
                 )
 
         if MODEL == "TEXT_RANK":
-            test_ds = CNNDailyMailDataset(
-                split="test", tokenizer=None, dataset_length=DATASET_LENGTH
-            )
-            test_loader = DataLoader(test_ds, batch_size=2)
+            test_ds = CNNDailyMailDataset(split="test", tokenizer=None)
+            test_loader = torch.utils.data.DataLoader(test_ds, batch_size=2)
         else:
-            test_ds = CNNDailyMailDataset(
-                split="test", tokenizer=tokenizer, dataset_length=DATASET_LENGTH
-            )
+            test_ds = CNNDailyMailDataset(split="test", tokenizer=tokenizer)
             test_loader = DataLoader(
                 test_ds,
                 collate_fn=build_collate_fn(tokenizer),
                 batch_sampler=(
-                    DynamicBatchSampler(
-                        test_ds, max_tokens=MAX_TOKENS_EACH_BATCH, shuffle=True
-                    )
+                    DynamicBatchSampler(test_ds, max_tokens=MAX_TOKENS_EACH_BATCH)
                 ),
             )
             checkpoint_file, checkpoint_idx = find_latest_checkpoint(
