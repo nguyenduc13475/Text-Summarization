@@ -23,7 +23,6 @@ MODEL = "POINTER_GENERATOR_NETWORK"
 CHECKPOINT_FOLDER = f"{MODEL.lower()}_checkpoints"
 NUM_EPOCHS = 200
 MAX_TOKENS_EACH_BATCH = 32000
-VALIDATION_DATASET_LENGTH = None
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 ENV = detect_runtime_env()
 METRICS = ["rouge1", "rouge2", "rougeL", "bleu4", "meteor", "bertscore", "moverscore"]
@@ -51,17 +50,13 @@ if __name__ == "__main__":
     ds = CNNDailyMailDataset(
         split="validation",
         tokenizer=tokenizer,
-        dataset_length=VALIDATION_DATASET_LENGTH,
     )
-    loader = (
-        DataLoader(
+    loader = DataLoader(
+        ds,
+        collate_fn=collate_fn,
+        batch_sampler=DynamicBatchSampler(
             ds,
-            collate_fn=collate_fn,
-            batch_sampler=DynamicBatchSampler(
-                ds,
-                max_tokens=MAX_TOKENS_EACH_BATCH,
-            ),
-            pin_memory=True if DEVICE == "cuda" else False,
+            max_tokens=MAX_TOKENS_EACH_BATCH,
         ),
     )
 
@@ -76,7 +71,7 @@ if __name__ == "__main__":
                 bottle_neck_dim=512,
                 num_layers=2,
                 cov_loss_factor=1.0,
-                learning_rate=1e-2,
+                learning_rate=1e-3,
                 device=DEVICE,
             )
         case "NEURAL_INTRA_ATTENTION_MODEL":
@@ -84,18 +79,19 @@ if __name__ == "__main__":
                 tokenizer=tokenizer,
                 embedding_dim=128,
                 hidden_dim=256,
+                bottle_neck_dim=512,
                 num_layers=2,
-                rl_loss_factor=0.75,
-                learning_rate=1e-2,
+                rl_loss_factor=0.0,
+                learning_rate=1e-3,
                 device=DEVICE,
             )
         case "TRANSFORMER":
             model = Transformer(
                 tokenizer=tokenizer,
                 d_model=256,
-                nhead=8,
+                nhead=2,
                 num_layers=3,
-                learning_rate=1e-3,
+                learning_rate=1e-4,
                 device=DEVICE,
             )
 
@@ -121,7 +117,6 @@ if __name__ == "__main__":
                 unigram_penalty=-2,
                 penalty_range=8,
                 original_attention=0.7,
-                shorten_level=10,
             )["output_ids"]
 
             output_texts = [
@@ -137,7 +132,7 @@ if __name__ == "__main__":
             ).items():
                 metrics[metric].extend(values)
             print(
-                f"Validated {num_samples}/{VALIDATION_DATASET_LENGTH if VALIDATION_DATASET_LENGTH is not None else len(ds)} samples"
+                f"Validated {num_samples}/{len(ds) if len(ds) is not None else len(ds)} samples"
             )
             torch.cuda.empty_cache()
 

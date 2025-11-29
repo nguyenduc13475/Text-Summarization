@@ -110,9 +110,9 @@ def save_checkpoint(model, checkpoint_file, save_optimizer=True):
         torch.save(model.state_dict(), checkpoint_file)
 
 
-def load_checkpoint(model, checkpoint_file, map_location="cpu", load_optimizer=True):
+def load_checkpoint(model, checkpoint_file, map_location="cpu"):
     checkpoint = torch.load(checkpoint_file, map_location=map_location)
-    if load_optimizer:
+    if type(checkpoint) == dict:
         model.load_state_dict(checkpoint["model_state_dict"])
         model.optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
     else:
@@ -132,9 +132,11 @@ def cache(func, name):
         return result
 
 
-def create_appearance_boost(batch_input_ids, model, original_attention):
+def create_appearance_boost(batch_input_ids, model, original_attention, num_oovs=0):
     batch_size = batch_input_ids.shape[0]
-    appearance_boost = torch.zeros(batch_size, model.vocab_size, device=model.device)
+    appearance_boost = torch.zeros(
+        batch_size, model.vocab_size + num_oovs, device=model.device
+    )
     for i in range(batch_size):
         appearance_boost[i, torch.unique(batch_input_ids[i])] = original_attention
     appearance_boost = appearance_boost[:, model.end_token :]

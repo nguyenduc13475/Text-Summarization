@@ -21,7 +21,7 @@ from utils import load_checkpoint, name_to_latex, save_checkpoint, set_seed
 
 set_seed()
 
-MODEL = "TRANSFORMER"
+MODEL = "NEURAL_INTRA_ATTENTION_MODEL"
 CHECKPOINT_FOLDER = f"{MODEL.lower()}_checkpoints"
 NUM_EPOCHS = 200
 MAX_TOKENS_EACH_BATCH = 10000

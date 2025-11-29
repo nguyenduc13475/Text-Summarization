@@ -9,7 +9,7 @@ from torch.nn.utils.rnn import pack_padded_sequence, pad_packed_sequence
 
 from beam_search import BeamSearch
 from metrics import compute_metric
-from utils import create_appearance_boost, tensor_dict_to_scalar, token_ids_to_text
+from utils import tensor_dict_to_scalar, token_ids_to_text
 
 
 def init_weights(m):
@@ -518,15 +518,14 @@ class NeuralIntraAttentionModel(nn.Module):
         self,
         batch_input_ids,
         max_output_length=100,
-        beam_width=4,
-        trigram_penalty=-1e5,
-        bigram_penalty=-1e5,
+        beam_width=6,
+        trigram_penalty=-30,
+        bigram_penalty=-15,
         unigram_penalty=-2,
-        penalty_range=8,
-        original_attention=0.7,
-        shorten_level=10,
+        penalty_range=15,
         return_attention=False,
         return_embedding=False,
+        **kwargs
     ):
         self.eval()
         with torch.no_grad():
@@ -620,15 +619,10 @@ class NeuralIntraAttentionModel(nn.Module):
                 dim=1,
             )
 
-            appearance_boost = create_appearance_boost(
-                batch_input_ids, self, original_attention
-            )
-
             vocab_distributions = F.softmax(
                 self.vocab_proj_2(
                     self.bottle_neck_activation(self.vocab_proj_1(concat_states))
-                )
-                + appearance_boost,
+                ),
                 dim=1,
             )
 
@@ -665,10 +659,8 @@ class NeuralIntraAttentionModel(nn.Module):
                 decoder_attention_distributions_list = []
 
             batch_input_ids = batch_input_ids.repeat_interleave(beam_width, dim=0)
-            appearance_boost = appearance_boost.repeat_interleave(beam_width, dim=0)
 
             for _ in range(2, max_output_length + 1):
-                appearance_boost[:, 0] += shorten_level / max_output_length
                 _, (decoder_hidden_states, decoder_cell_states) = self.decoder(
                     current_embeddings.unsqueeze(1),
                     (decoder_hidden_states, decoder_cell_states),
@@ -742,8 +734,7 @@ class NeuralIntraAttentionModel(nn.Module):
                 vocab_distributions = F.softmax(
                     self.vocab_proj_2(
                         self.bottle_neck_activation(self.vocab_proj_1(concat_states))
-                    )
-                    + appearance_boost,
+                    ),
                     dim=1,
                 )
 

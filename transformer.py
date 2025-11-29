@@ -322,15 +322,15 @@ class Transformer(nn.Module):
         self,
         batch_input_ids,
         max_output_length=100,
-        beam_width=1,
-        trigram_penalty=-1e5,
-        bigram_penalty=-1e5,
+        beam_width=6,
+        trigram_penalty=-30,
+        bigram_penalty=-15,
         unigram_penalty=-2,
-        penalty_range=8,
-        original_attention=0.7,
-        shorten_level=10,
+        penalty_range=15,
+        original_attention=2,
         return_attention=False,
         return_embedding=False,
+        **kwargs
     ):
         self.eval()
         with torch.no_grad():
@@ -393,8 +393,7 @@ class Transformer(nn.Module):
             appearance_boost = appearance_boost.repeat_interleave(beam_width, dim=0)
             input_padding_mask = input_padding_mask.repeat_interleave(beam_width, dim=0)
 
-            for step in range(2, max_output_length + 1):
-                appearance_boost[:, 0] += shorten_level / max_output_length
+            for _ in range(2, max_output_length + 1):
                 tgt_mask = nn.Transformer.generate_square_subsequent_mask(
                     batch_current_output_embeddings.shape[1], dtype=torch.bool
                 ).to(self.device)

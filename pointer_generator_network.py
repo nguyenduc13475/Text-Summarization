@@ -6,7 +6,7 @@ import torch.optim as optim
 from torch.nn.utils.rnn import pack_padded_sequence, pad_packed_sequence
 
 from beam_search import BeamSearch
-from utils import create_appearance_boost, tensor_dict_to_scalar
+from utils import tensor_dict_to_scalar
 
 
 def init_weights(m):
@@ -281,16 +281,15 @@ class PointerGeneratorNetwork(nn.Module):
     def infer(
         self,
         batch_input_ids,
-        max_output_length=200,
-        beam_width=3,
-        trigram_penalty=-1e5,
-        bigram_penalty=-1e5,
+        max_output_length=100,
+        beam_width=6,
+        trigram_penalty=-30,
+        bigram_penalty=-15,
         unigram_penalty=-2,
-        penalty_range=8,
-        original_attention=0.7,
-        shorten_level=10,
+        penalty_range=15,
         return_attention=False,
         return_embedding=False,
+        **kwargs
     ):
         self.eval()
         with torch.no_grad():
@@ -370,15 +369,10 @@ class PointerGeneratorNetwork(nn.Module):
                 [decoder_hidden_states[-1], context_vectors], dim=1
             )
 
-            appearance_boost = create_appearance_boost(
-                batch_input_ids, self, original_attention
-            )
-
             vocab_distributions = F.softmax(
                 self.vocab_proj_2(
                     self.bottle_neck_activation(self.vocab_proj_1(hidden_contexts))
-                )
-                + appearance_boost,
+                ),
                 dim=1,
             )
             p_gens = torch.sigmoid(
@@ -394,6 +388,7 @@ class PointerGeneratorNetwork(nn.Module):
             batch_final_distributions = batch_generator_probs.scatter_add(
                 1, batch_input_ids, batch_pointer_probs
             )
+            batch_final_distributions = F.softmax(batch_final_distributions, dim=1)
 
             chosen_tokens = beam_search.init_from_first_topk(batch_final_distributions)
             current_embeddings = self._safe_embed(chosen_tokens)
@@ -413,10 +408,8 @@ class PointerGeneratorNetwork(nn.Module):
             )
             input_padding_mask = input_padding_mask.repeat_interleave(beam_width, dim=0)
             batch_input_ids = batch_input_ids.repeat_interleave(beam_width, dim=0)
-            appearance_boost = appearance_boost.repeat_interleave(beam_width, dim=0)
 
             for _ in range(2, max_output_length + 1):
-                appearance_boost[:, 0] += shorten_level / max_output_length
                 _, (decoder_hidden_states, decoder_cell_states) = self.decoder(
                     current_embeddings.unsqueeze(1),
                     (
@@ -448,8 +441,7 @@ class PointerGeneratorNetwork(nn.Module):
                 vocab_distributions = F.softmax(
                     self.vocab_proj_2(
                         self.bottle_neck_activation(self.vocab_proj_1(hidden_contexts))
-                    )
-                    + appearance_boost,
+                    ),
                     dim=1,
                 )
                 p_gens = torch.sigmoid(
