@@ -14,7 +14,7 @@ from utils import tensor_dict_to_scalar, token_ids_to_text
 
 def init_weights(m):
     if isinstance(m, nn.Embedding):
-        init.uniform_(m.weight, -0.1, 0.1)
+        init.normal_(m.weight, mean=0.0, std=1.0)
 
     elif isinstance(m, nn.Linear):
         init.xavier_uniform_(m.weight)
