@@ -70,8 +70,6 @@ if __name__ == "__main__":
                 attention_dim=256,
                 bottle_neck_dim=512,
                 num_layers=2,
-                cov_loss_factor=1.0,
-                learning_rate=1e-3,
                 device=DEVICE,
             )
         case "NEURAL_INTRA_ATTENTION_MODEL":
@@ -81,8 +79,6 @@ if __name__ == "__main__":
                 hidden_dim=256,
                 bottle_neck_dim=512,
                 num_layers=2,
-                rl_loss_factor=0.0,
-                learning_rate=1e-3,
                 device=DEVICE,
             )
         case "TRANSFORMER":
@@ -91,7 +87,6 @@ if __name__ == "__main__":
                 d_model=256,
                 nhead=2,
                 num_layers=3,
-                learning_rate=1e-4,
                 device=DEVICE,
             )
 
@@ -108,16 +103,7 @@ if __name__ == "__main__":
         num_samples = 0
         for batch_idx, batch in enumerate(loader):
             num_samples += len(batch["input_ids"])
-            batch_output_ids = model.infer(
-                batch["input_ids"],
-                max_output_length=200,
-                beam_width=3,
-                trigram_penalty=-1e5,
-                bigram_penalty=-1e5,
-                unigram_penalty=-2,
-                penalty_range=8,
-                original_attention=0.7,
-            )["output_ids"]
+            batch_output_ids = model.infer(batch["input_ids"])["output_ids"]
 
             output_texts = [
                 token_ids_to_text(
