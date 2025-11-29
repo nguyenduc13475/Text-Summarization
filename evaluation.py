@@ -116,16 +116,7 @@ if __name__ == "__main__":
                 candidate_summaries = text_rank_summarize(batch["input_text"], 3)
                 reference_summaries = batch["target_text"]
             else:
-                batch_output_ids = model.infer(
-                    batch["input_ids"],
-                    max_output_length=5,
-                    beam_width=2,
-                    trigram_penalty=-1e5,
-                    bigram_penalty=-1e5,
-                    unigram_penalty=-2,
-                    penalty_range=8,
-                    original_attention=0.7,
-                )["output_ids"]
+                batch_output_ids = model.infer(batch["input_ids"])["output_ids"]
                 candidate_summaries = [
                     token_ids_to_text(
                         tokenizer,

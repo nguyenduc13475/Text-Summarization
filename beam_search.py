@@ -31,10 +31,10 @@ class BeamSearch:
     def advance(
         self,
         batch_final_distributions,
-        trigram_penalty=-1e5,
-        bigram_penalty=-1e5,
+        trigram_penalty=-30,
+        bigram_penalty=-10,
         unigram_penalty=-2,
-        penalty_range=8,
+        penalty_range=15,
     ):
         batch_log_probs = torch.log(batch_final_distributions + 1e-9)
         if self.finishes.any():
