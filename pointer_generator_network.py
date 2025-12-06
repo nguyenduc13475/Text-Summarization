@@ -11,7 +11,7 @@ from utils import tensor_dict_to_scalar
 
 def init_weights(m):
     if isinstance(m, nn.Embedding):
-        init.normal_(m.weight, mean=0.0, std=1.0)
+        init.uniform_(m.weight, -0.1, 0.1)
 
     elif isinstance(m, nn.Linear):
         init.xavier_uniform_(m.weight)
@@ -86,9 +86,7 @@ class PointerGeneratorNetwork(nn.Module):
         self.device = torch.device(device)
         self.apply(init_weights)
         self.to(device)
-        self.optimizer = optim.Adam(
-            self.parameters(), lr=learning_rate, weight_decay=1e-5
-        )
+        self.optimizer = optim.Adam(self.parameters(), lr=learning_rate)
         if self.device.type == "cuda":
             self.scaler = torch.amp.GradScaler()
         self.cov_loss_factor = cov_loss_factor
