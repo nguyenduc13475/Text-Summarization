@@ -86,7 +86,9 @@ class PointerGeneratorNetwork(nn.Module):
         self.device = torch.device(device)
         self.apply(init_weights)
         self.to(device)
-        self.optimizer = optim.Adam(self.parameters(), lr=learning_rate)
+        self.optimizer = optim.Adam(
+            self.parameters(), lr=learning_rate, weight_decay=1e-5
+        )
         if self.device.type == "cuda":
             self.scaler = torch.amp.GradScaler()
         self.cov_loss_factor = cov_loss_factor
