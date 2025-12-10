@@ -156,6 +156,10 @@ if __name__ == "__main__":
             checkpoint_file, checkpoint_idx = find_latest_checkpoint(
                 f"{MODEL.lower()}_checkpoints"
             )
+            if checkpoint_file is None:
+                checkpoint_file, checkpoint_idx = find_latest_checkpoint(
+                    f"/content/drive/MyDrive/DATHAI/{MODEL.lower()}_checkpoints"
+                )
             if checkpoint_file is not None:
                 load_checkpoint(model, checkpoint_file, map_location=DEVICE)
                 print("Model loaded successfully!")
