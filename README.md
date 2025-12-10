@@ -123,3 +123,20 @@ Các chỉ số được sử dụng để đánh giá mô hình:
 - **MoverScore**
 
 ---
+
+## Kết quả so sánh các mô hình trên Test Set
+![Bar_Chart_Comparison](Image/Bar_Chart_Comparison.png)
+
+## Training Loss Curves
+
+Pointer-Generator Network Loss Curves
+
+![Pointer Loss](Image/PointerLoss.png)
+
+Neural Intra-Attention Model Loss Curves
+
+![Intra Loss](Image/NeuralLoss.png)
+
+Transformer Loss Curves
+
+![Transformer Loss](Image/TransformLoss.png)
