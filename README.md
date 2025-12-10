@@ -92,12 +92,7 @@ python checkpoint_validation.py
 ```
 > Các tham số có thể chỉnh trong file `checkpoint_validation.py`.
 
-### 7. Chạy TextRank
-```bash
-python text_rank.py
-```
-
-### 8. Xóa training cache
+### 7. Xóa training cache
 ```bash
 rmdir /s /q cache
 ```
