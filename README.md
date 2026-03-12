@@ -48,21 +48,21 @@ To skip training and jump straight to inference or evaluation, you can download 
 
 ```bash
 mkdir -p transformer_checkpoints
-wget https://github.com/nguyenduc13475/Text-Summarization/releases/download/v1.0/transformer_checkpoint_latest.pt -O transformer_checkpoints/checkpoint_0.pt
+wget https://github.com/nguyenduc13475/Text-Summarization/releases/download/v1.0/transformer_weights.pt -O transformer_checkpoints/checkpoint_0.pt
 ```
 
 - For Pointer Generator Network:
 
 ```bash
 mkdir -p pointer_generator_network_checkpoints
-wget https://github.com/nguyenduc13475/Text-Summarization/releases/download/v1.0/pointer_generator_network_checkpoint_latest.pt -O pointer_generator_network_checkpoints/checkpoint_0.pt
+wget https://github.com/nguyenduc13475/Text-Summarization/releases/download/v1.0/pointer_gen_weights.pt -O pointer_generator_network_checkpoints/checkpoint_0.pt
 ```
 
 - For Neural Intra-Attention Model:
 
 ```bash
 mkdir -p neural_intra_attention_model_checkpoints
-wget https://github.com/nguyenduc13475/Text-Summarization/releases/download/v1.0/neural_intra_attention_model_checkpoint_latest.pt -O neural_intra_attention_model_checkpoints/checkpoint_0.pt
+wget https://github.com/nguyenduc13475/Text-Summarization/releases/download/v1.0/intra_attn_weights.pt -O neural_intra_attention_model_checkpoints/checkpoint_0.pt
 ```
 
 ---
