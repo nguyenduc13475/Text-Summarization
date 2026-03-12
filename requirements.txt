@@ -1,0 +1,16 @@
+numpy
+torch
+matplotlib
+tokenizers
+datasets
+networkx
+nltk
+scikit-learn
+bert-score
+pot
+rouge-score
+sentence-transformers
+transformers
+ipython
+PyYAML
+omegaconf

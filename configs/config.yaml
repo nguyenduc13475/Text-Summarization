@@ -1,0 +1,61 @@
+# configs/config.yaml
+project:
+  name: "Text_Summarization"
+  author: "Nguyen Van Duc"
+
+environment:
+  seed: 42
+  device: "auto" # Sẽ tự detect cuda hoặc cpu
+
+model:
+  name: "POINTER_GENERATOR_NETWORK" # TEXT_RANK, POINTER_GENERATOR_NETWORK, NEURAL_INTRA_ATTENTION_MODEL, TRANSFORMER
+  max_tokens_each_batch: 10000
+  
+  POINTER_GENERATOR_NETWORK:
+    embedding_dim: 128
+    encoder_hidden_dim: 256
+    decoder_hidden_dim: 256
+    attention_dim: 256
+    bottle_neck_dim: 512
+    num_layers: 2
+    cov_loss_factor: 1.0
+    learning_rate: 0.001
+
+  NEURAL_INTRA_ATTENTION_MODEL:
+    embedding_dim: 128
+    hidden_dim: 256
+    bottle_neck_dim: 512
+    num_layers: 2
+    rl_loss_factor: 0.0
+    learning_rate: 0.001
+
+  TRANSFORMER:
+    d_model: 256
+    nhead: 2
+    num_layers: 3
+    learning_rate: 0.0001
+
+training:
+  epochs: 200
+  train_batch_nums: null
+  train_start_batch: 0
+  validation_batch_nums: 10
+  validation_start_batch: 0
+  loss_log_mode: "graph" # console, file, graph
+  loss_log_interval: 10
+  model_save_interval: 1000
+  save_checkpoint: false
+  continue_training: true
+
+validation:
+  max_tokens_each_batch: 32000
+  metrics: ["rouge1", "rouge2", "rougeL", "bleu4", "meteor", "bertscore", "moverscore"]
+
+cross_validation:
+  num_folds: 10
+  epochs: 10
+  max_tokens_each_batch: 10000
+
+inference:
+  max_output_length: 100
+  beam_width: 6
